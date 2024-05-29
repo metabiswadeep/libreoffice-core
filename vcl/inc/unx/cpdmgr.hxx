@@ -33,7 +33,6 @@ typedef struct _GDBusConnection GDBusConnection;
 #include "cupsmgr.hxx"
 
 #define BACKEND_DIR "/usr/share/print-backends"
-#define FRONTEND_INTERFACE "/usr/share/dbus-1/interfaces/org.openprinting.Frontend.xml"
 #define BACKEND_INTERFACE "/usr/share/dbus-1/interfaces/org.openprinting.Backend.xml"
 
 namespace psp
@@ -72,7 +71,10 @@ class CPDManager final : public PrinterInfoManager
 
 #if ENABLE_DBUS && ENABLE_GIO
     static void onNameAcquired(GDBusConnection* connection, const gchar* name, gpointer user_data);
-    static void onNameLost(GDBusConnection*, const gchar* name, gpointer);
+    static void onNameLost(GDBusConnection* connection, const gchar* name, gpointer user_data);
+    static void onStateChanged(GDBusConnection* connection, const gchar* sender_name,
+                              const gchar* object_path, const gchar* interface_name, 
+                              const gchar* signal_name, GVariant* parameters, gpointer user_data);
     static void printerAdded(GDBusConnection* connection, const gchar* sender_name,
                              const gchar* object_path, const gchar* interface_name,
                              const gchar* signal_name, GVariant* parameters, gpointer user_data);

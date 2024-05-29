@@ -33,125 +33,114 @@
 #include <config_dbus.h>
 #include <config_gio.h>
 
+#include <cpdb/cpdb-frontend.h>
+
 using namespace psp;
 
 #if ENABLE_DBUS && ENABLE_GIO
 // Function to execute when name is acquired on the bus
 void CPDManager::onNameAcquired(GDBusConnection* connection, const gchar*, gpointer user_data)
 {
-    gchar* contents;
-    // Get Interface for introspection
-    if (!g_file_get_contents(FRONTEND_INTERFACE, &contents, nullptr, nullptr))
-        return;
+    GError *error = NULL;
+    cpdb_frontend_obj_t *f = static_cast<cpdb_frontend_obj_t *> (user_data);
+    
+    g_dbus_connection_signal_subscribe(connection,
+                                       NULL,                            //Sender name
+                                       "org.openprinting.PrintBackend", //Sender interface
+                                       CPDB_SIGNAL_PRINTER_ADDED,       //Signal name
+                                       NULL,                            /**match on all object paths**/
+                                       NULL,                            /**match on all arguments**/
+                                       0,                               //Flags
+                                       on_printer_added,                //callback
+                                       user_data,                       //user_data
+                                       NULL);
 
-    GDBusNodeInfo* introspection_data = g_dbus_node_info_new_for_xml(contents, nullptr);
+    g_dbus_connection_signal_subscribe(connection,
+                                       NULL,                            //Sender name
+                                       "org.openprinting.PrintBackend", //Sender interface
+                                       CPDB_SIGNAL_PRINTER_REMOVED,     //Signal name
+                                       NULL,                            /**match on all object paths**/
+                                       NULL,                            /**match on all arguments**/
+                                       0,                               //Flags
+                                       on_printer_removed,              //callback
+                                       user_data,                       //user_data
+                                       NULL);
+    g_dbus_connection_signal_subscribe(connection,
+                                       NULL,                                //Sender name
+                                       "org.openprinting.PrintBackend",     //Sender interface
+                                       CPDB_SIGNAL_PRINTER_STATE_CHANGED,   //Signal name
+                                       NULL,                                /**match on all object paths**/
+                                       NULL,                                /**match on all arguments**/
+                                       0,                                   //Flags
+                                       on_printer_state_changed,            //callback
+                                       user_data,                           //user_data
+                                       NULL);
 
-    g_dbus_connection_register_object(connection, "/org/libreoffice/PrintDialog",
-                                      introspection_data->interfaces[0], nullptr,
-                                      nullptr, /* user_data */
-                                      nullptr, /* user_data_free_func */
-                                      nullptr); /* GError** */
-    g_free(contents);
-    g_dbus_node_info_unref(introspection_data);
-
-    CPDManager* current = static_cast<CPDManager*>(user_data);
-    std::vector<std::pair<std::string, gchar*>> backends = current->getTempBackends();
-    for (auto const& backend : backends)
+    g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(f->skeleton),
+                                     connection, 
+                                     CPDB_DIALOG_OBJ_PATH,
+                                     &error);
+    if (error)
     {
-        // Get Interface for introspection
-        if (g_file_get_contents(BACKEND_INTERFACE, &contents, nullptr, nullptr))
-        {
-            introspection_data = g_dbus_node_info_new_for_xml(contents, nullptr);
-            GDBusProxy* proxy = g_dbus_proxy_new_sync(
-                connection, G_DBUS_PROXY_FLAGS_NONE, introspection_data->interfaces[0],
-                backend.first.c_str(), backend.second, "org.openprinting.PrintBackend", nullptr,
-                nullptr);
-            g_assert(proxy != nullptr);
-            g_dbus_proxy_call(proxy, "ActivateBackend", nullptr, G_DBUS_CALL_FLAGS_NONE, -1,
-                              nullptr, nullptr, nullptr);
-
-            g_object_unref(proxy);
-            g_dbus_node_info_unref(introspection_data);
-            g_free(contents);
-        }
-        g_free(backend.second);
+        g_message("Error exporting frontend interface : %s\n", error->message);
+        return;
     }
+    
+    cpdbActivateBackends(f);
+    f->name_done = TRUE;
 }
 
-void CPDManager::onNameLost(GDBusConnection*, const gchar* name, gpointer)
+void CPDManager::onNameLost(GDBusConnection* connection, const gchar* name, gpointer user_data)
 {
     g_message("Name Lost: %s", name);
+    cpdb_frontend_obj_t *f = user_data;
+    f->name_done = TRUE;
+}
+
+void CPDManager::onStateChanged(GDBusConnection* connection, const gchar* sender_name,
+                              const gchar* object_path, const gchar* interface_name, const gchar* signal_name,
+                              GVariant* parameters, gpointer user_data){
+    //Implement state changed signal
+    cpdb_frontend_obj_t *f = static_cast<cpdb_frontend_obj_t *> (user_data);
+    gboolean printer_is_accepting_jobs;
+    char *printer_id, *printer_state, *backend_name;
+
+    g_variant_get(parameters, "(ssbs)", &printer_id, &printer_state,
+                    &printer_is_accepting_jobs, &backend_name);
+    cpdb_printer_obj_t *p = cpdbFindPrinterObj(f, printer_id, backend_name);
+    if (p->state)
+        free(p->state);
+    p->state = cpdbGetStringCopy(printer_state);
+    p->accepting_jobs = printer_is_accepting_jobs;
+    f->printer_cb(f, p, CPDB_CHANGE_PRINTER_STATE_CHANGED);
 }
 
 void CPDManager::printerAdded(GDBusConnection* connection, const gchar* sender_name,
-                              const gchar* object_path, const gchar* interface_name, const gchar*,
+                              const gchar* object_path, const gchar* interface_name, const gchar* signal_name,
                               GVariant* parameters, gpointer user_data)
 {
-    CPDManager* current = static_cast<CPDManager*>(user_data);
-    GDBusProxy* proxy;
-    proxy = current->getProxy(sender_name);
-    if (proxy == nullptr)
+    cpdb_frontend_obj_t *f = static_cast<cpdb_frontend_obj_t *> (user_data);
+    cpdb_printer_obj_t *p = cpdbGetNewPrinterObj();
+    
+    if (f->last_saved_settings != NULL)
     {
-        gchar* contents;
-
-        // Get Interface for introspection
-        if (g_file_get_contents("/usr/share/dbus-1/interfaces/org.openprinting.Backend.xml",
-                                &contents, nullptr, nullptr))
-        {
-            GDBusNodeInfo* introspection_data = g_dbus_node_info_new_for_xml(contents, nullptr);
-            proxy = g_dbus_proxy_new_sync(connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
-                                          introspection_data->interfaces[0], sender_name,
-                                          object_path, interface_name, nullptr, nullptr);
-
-            g_dbus_node_info_unref(introspection_data);
-            std::pair<std::string, GDBusProxy*> new_backend(sender_name, proxy);
-            current->addBackend(std::move(new_backend));
-            g_free(contents);
-        }
+        cpdbCopySettings(f->last_saved_settings, p->settings);
     }
-    CPDPrinter* pDest = static_cast<CPDPrinter*>(malloc(sizeof(CPDPrinter)));
-    pDest->backend = proxy;
-    g_variant_get(parameters, "(sssssbss)", &(pDest->id), &(pDest->name), &(pDest->info),
-                  &(pDest->location), &(pDest->make_and_model), &(pDest->is_accepting_jobs),
-                  &(pDest->printer_state), &(pDest->backend_name));
-    std::stringstream printerName;
-    printerName << pDest->name << ", " << pDest->backend_name;
-    std::stringstream uniqueName;
-    uniqueName << pDest->id << ", " << pDest->backend_name;
-    rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
-    OUString aPrinterName = OStringToOUString(printerName.str(), aEncoding);
-    OUString aUniqueName = OStringToOUString(uniqueName.str(), aEncoding);
-    current->addNewPrinter(aPrinterName, aUniqueName, pDest);
+    cpdbFillBasicOptions(p, parameters);
+    cpdbAddPrinter(f, p);
+    f->printer_cb(f, p, CPDB_CHANGE_PRINTER_ADDED);
 }
 
 void CPDManager::printerRemoved(GDBusConnection*, const gchar*, const gchar*, const gchar*,
                                 const gchar*, GVariant* parameters, gpointer user_data)
 {
-    // TODO: Remove every data linked to this particular printer.
-    CPDManager* pManager = static_cast<CPDManager*>(user_data);
-    char* id;
-    char* backend_name;
-    g_variant_get(parameters, "(ss)", &id, &backend_name);
-    std::stringstream uniqueName;
-    uniqueName << id << ", " << backend_name;
-    rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
-    OUString aUniqueName = OStringToOUString(uniqueName.str(), aEncoding);
-    std::unordered_map<OUString, CPDPrinter*>::iterator it
-        = pManager->m_aCPDDestMap.find(aUniqueName);
-    if (it == pManager->m_aCPDDestMap.end())
-    {
-        SAL_WARN("vcl.unx.print", "CPD trying to remove non-existent printer from list");
-        return;
-    }
-    pManager->m_aCPDDestMap.erase(it);
-    std::unordered_map<OUString, Printer>::iterator printersIt
-        = pManager->m_aPrinters.find(aUniqueName);
-    if (printersIt == pManager->m_aPrinters.end())
-    {
-        SAL_WARN("vcl.unx.print", "CPD trying to remove non-existent printer from m_aPrinters");
-        return;
-    }
-    pManager->m_aPrinters.erase(printersIt);
+    cpdb_frontend_obj_t *f = static_cast<cpdb_frontend_obj_t *> (user_data);
+    char *printer_id;
+    char *backend_name;
+    
+    g_variant_get(parameters, "(ss)", &printer_id, &backend_name);
+    cpdb_printer_obj_t *p = cpdbRemovePrinter(f, printer_id, backend_name);
+    f->printer_cb(f, p, CPDB_CHANGE_PRINTER_REMOVED);
 }
 
 GDBusProxy* CPDManager::getProxy(const std::string& target)
@@ -228,8 +217,7 @@ CPDManager* CPDManager::tryLoadCPD()
     if (!pEnv || !*pEnv)
     {
         // interface description XML files are needed in 'onNameAcquired()'
-        if (!g_file_test(FRONTEND_INTERFACE, G_FILE_TEST_IS_REGULAR)
-            || !g_file_test(BACKEND_INTERFACE, G_FILE_TEST_IS_REGULAR))
+        if (!g_file_test(BACKEND_INTERFACE, G_FILE_TEST_IS_REGULAR))
         {
             return nullptr;
         }
@@ -480,7 +468,7 @@ void CPDManager::initialize()
     PrinterInfoManager::initialize();
 #if ENABLE_DBUS && ENABLE_GIO
     g_bus_own_name_on_connection(m_pConnection, "org.libreoffice.print-dialog",
-                                 G_BUS_NAME_OWNER_FLAGS_NONE, onNameAcquired, onNameLost, this,
+                                 G_BUS_NAME_OWNER_FLAGS_NONE, onNameAcquired, onNameLost, onStateChanged, this,
                                  nullptr);
 
     g_dbus_connection_signal_subscribe(m_pConnection, // DBus Connection
