@@ -39,28 +39,25 @@ namespace psp
 {
 class PPDParser;
 
-struct CPDPrinter
-{
-    const char* id;
-    const char* name;
-    const char* info;
-    const char* location;
-    const char* make_and_model;
-    const char* printer_state;
-    const char* backend_name;
-    bool is_accepting_jobs;
-    GDBusProxy* backend;
-};
+// struct CPDPrinter
+// {
+//     const char* id;
+//     const char* name;
+//     const char* info;
+//     const char* location;
+//     const char* make_and_model;
+//     const char* printer_state;
+//     const char* backend_name;
+//     bool is_accepting_jobs;
+//     GDBusProxy* backend;
+// };
 
 class CPDManager final : public PrinterInfoManager
 {
 #if ENABLE_DBUS && ENABLE_GIO
-    GDBusConnection* m_pConnection = nullptr;
     bool m_aPrintersChanged = true;
-    std::vector<std::pair<std::string, gchar*>> m_tBackends;
-    std::unordered_map<std::string, GDBusProxy*> m_pBackends;
     std::unordered_map<FILE*, OString, FPtrHash> m_aSpoolFiles;
-    std::unordered_map<OUString, CPDPrinter*> m_aCPDDestMap;
+    std::unordered_map<OUString, cpdb_printer_obj_t*> m_aCPDDestMap;
     std::unordered_map<OUString, PPDContext> m_aDefaultContexts;
 #endif
     CPDManager();
@@ -72,7 +69,7 @@ class CPDManager final : public PrinterInfoManager
 #if ENABLE_DBUS && ENABLE_GIO
     static void onNameAcquired(GDBusConnection* connection, const gchar* name, gpointer user_data);
     static void onNameLost(GDBusConnection* connection, const gchar* name, gpointer user_data);
-    static void onStateChanged(GDBusConnection* connection, const gchar* sender_name,
+    static void printerStateChanged(GDBusConnection* connection, const gchar* sender_name,
                               const gchar* object_path, const gchar* interface_name, 
                               const gchar* signal_name, GVariant* parameters, gpointer user_data);
     static void printerAdded(GDBusConnection* connection, const gchar* sender_name,
@@ -94,7 +91,7 @@ public:
     void addBackend(std::pair<std::string, GDBusProxy*> pair);
     void addTempBackend(const std::pair<std::string, gchar*>& pair);
     std::vector<std::pair<std::string, gchar*>> const& getTempBackends() const;
-    void addNewPrinter(const OUString&, const OUString&, CPDPrinter*);
+    void addNewPrinter(const OUString&, const OUString&, cpdb_printer_obj_t*);
 #endif
 
     // Create CPDManager
