@@ -31,6 +31,7 @@ typedef struct _GDBusConnection GDBusConnection;
 
 #include <printerinfomanager.hxx>
 #include "cupsmgr.hxx"
+#include <cpdb/frontend.h>
 
 #define BACKEND_DIR "/usr/share/print-backends"
 #define BACKEND_INTERFACE "/usr/share/dbus-1/interfaces/org.openprinting.Backend.xml"
@@ -59,6 +60,7 @@ class CPDManager final : public PrinterInfoManager
     std::unordered_map<FILE*, OString, FPtrHash> m_aSpoolFiles;
     std::unordered_map<OUString, cpdb_printer_obj_t*> m_aCPDDestMap;
     std::unordered_map<OUString, PPDContext> m_aDefaultContexts;
+    cpdb_frontend_obj_t *frontendObj;
 #endif
     CPDManager();
     // Function called when CPDManager is destroyed
@@ -67,11 +69,14 @@ class CPDManager final : public PrinterInfoManager
     virtual void initialize() override;
 
 #if ENABLE_DBUS && ENABLE_GIO
-    static void onNameAcquired(GDBusConnection* connection, const gchar* name, gpointer user_data);
-    static void onNameLost(GDBusConnection* connection, const gchar* name, gpointer user_data);
+    static void printerUpdateCallback(cpdb_frontend_obj_t* frontendObj,
+                          cpdb_printer_obj_t* pDest,
+                          cpdb_printer_update_t change);
     static void printerStateChanged(GDBusConnection* connection, const gchar* sender_name,
                               const gchar* object_path, const gchar* interface_name, 
                               const gchar* signal_name, GVariant* parameters, gpointer user_data);
+    static void fillBasicOptions(cpdb_printer_obj_t *pDest,
+                          GVariant *parameters);
     static void printerAdded(GDBusConnection* connection, const gchar* sender_name,
                              const gchar* object_path, const gchar* interface_name,
                              const gchar* signal_name, GVariant* parameters, gpointer user_data);
@@ -79,19 +84,17 @@ class CPDManager final : public PrinterInfoManager
                                const gchar* object_path, const gchar* interface_name,
                                const gchar* signal_name, GVariant* parameters, gpointer user_data);
 
-    static void getOptionsFromDocumentSetup(const JobData& rJob, bool bBanner,
-                                            const OString& rJobName, int& rNumOptions,
-                                            GVariant** arr);
+    static cpdb_settings_t *getOptionsFromDocumentSetup(const JobData& rJob, bool bBanner,
+                                            const OString& rJobName, int& rNumOptions);
+    static void updatePrinters(gpointer key, gpointer value, gpointer user_data);
+    static void addPrinters(gpointer key, gpointer value, gpointer user_data);
 #endif
 
 public:
 #if ENABLE_DBUS && ENABLE_GIO
     // Functions involved in initialization
-    GDBusProxy* getProxy(const std::string& target);
-    void addBackend(std::pair<std::string, GDBusProxy*> pair);
-    void addTempBackend(const std::pair<std::string, gchar*>& pair);
-    std::vector<std::pair<std::string, gchar*>> const& getTempBackends() const;
     void addNewPrinter(const OUString&, const OUString&, cpdb_printer_obj_t*);
+
 #endif
 
     // Create CPDManager
@@ -108,7 +111,7 @@ public:
     virtual void setupJobContextData(JobData& rData) override;
 
     // check if the printer configuration has changed
-    virtual bool checkPrintersChanged(bool bWait) override;
+    virtual bool checkPrintersChanged(bool) override;
 };
 
 } // namespace psp

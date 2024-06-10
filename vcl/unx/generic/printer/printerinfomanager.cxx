@@ -83,13 +83,14 @@ PrinterInfoManager& PrinterInfoManager::get()
 
     pPIM = CPDManager::tryLoadCPD();
     SAL_WARN("vcl.unx.print", "using CPDB ");
+    assert(pPIM);
     if (!pPIM){
         pPIM = CUPSManager::tryLoadCUPS();
         SAL_WARN("vcl.unx.print", "using CUPS ");}
     if (!pPIM){
         pPIM = new PrinterInfoManager();
         SAL_WARN("vcl.unx.print", "using Default ");}
-    pSalData->m_pPrinterInfoManager.reset(pPIM);`
+    pSalData->m_pPrinterInfoManager.reset(pPIM);
     pPIM->initialize();
 
     SAL_INFO("vcl.unx.print", "created PrinterInfoManager of type "

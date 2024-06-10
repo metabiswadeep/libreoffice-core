@@ -33,8 +33,6 @@
 #include <config_dbus.h>
 #include <config_gio.h>
 
-#include <cpdb/cpdb-frontend.h>
-
 using namespace psp;
 
 #if ENABLE_DBUS && ENABLE_GIO
@@ -58,32 +56,6 @@ static void printerUpdateCallback(cpdb_frontend_obj_t* frontendObj,
         break;
     }
 }
-}
-// Function to execute when name is acquired on the bus
-void CPDManager::onNameAcquired(GDBusConnection* connection, const gchar*, gpointer user_data)
-{
-    GError *error = NULL;
-    cpdb_frontend_obj_t *frontendObj = static_cast<cpdb_frontend_obj_t *> (user_data);
-
-    g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(frontendObj->skeleton),
-                                     connection, 
-                                     CPDB_DIALOG_OBJ_PATH,
-                                     &error);
-    if (error)
-    {
-        g_message("Error exporting frontend interface : %s\n", error->message);
-        return;
-    }
-    
-    cpdbActivateBackends(frontendObj);
-    frontendObj->name_done = TRUE;
-}
-
-void CPDManager::onNameLost(GDBusConnection* connection, const gchar* name, gpointer user_data)
-{
-    g_message("Name Lost: %s", name);
-    cpdb_frontend_obj_t *frontendObj = static_cast<cpdb_frontend_obj_t *> (user_data);
-    frontendObj->name_done = TRUE;
 }
 
 void CPDManager::printerStateChanged(GDBusConnection* connection, const gchar* sender_name,
@@ -124,12 +96,13 @@ void CPDManager::printerAdded(GDBusConnection* connection, const gchar* sender_n
 {
     cpdb_frontend_obj_t *frontendObj = static_cast<cpdb_frontend_obj_t *> (user_data);
     cpdb_printer_obj_t *pDest = cpdbGetNewPrinterObj();
+    CPDManager *pManager = static_cast<CPDManager*>(user_data);
     
     if (frontendObj->last_saved_settings != NULL)
     {
         cpdbCopySettings(frontendObj->last_saved_settings, pDest->settings);
     }
-    current->fillBasicOptions(pDest, parameters);
+    fillBasicOptions(pDest, parameters);
     cpdbAddPrinter(frontendObj, pDest);
     frontendObj->printer_cb(frontendObj, pDest, CPDB_CHANGE_PRINTER_ADDED);
     std::stringstream printerName;
@@ -139,7 +112,7 @@ void CPDManager::printerAdded(GDBusConnection* connection, const gchar* sender_n
     rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
     OUString aPrinterName = OStringToOUString(printerName.str(), aEncoding);
     OUString aUniqueName = OStringToOUString(uniqueName.str(), aEncoding);
-    current->addNewPrinter(aPrinterName, aUniqueName, pDest);
+    pManager->addNewPrinter(aPrinterName, aUniqueName, pDest);
 }
 
 void CPDManager::printerRemoved(GDBusConnection*, const gchar*, const gchar*, const gchar*,
@@ -148,6 +121,7 @@ void CPDManager::printerRemoved(GDBusConnection*, const gchar*, const gchar*, co
     cpdb_frontend_obj_t *frontendObj = static_cast<cpdb_frontend_obj_t *> (user_data);
     char *printer_id;
     char *backend_name;
+    CPDManager *pManager = static_cast<CPDManager*>(user_data);
     
     g_variant_get(parameters, "(ss)", &printer_id, &backend_name);
     cpdb_printer_obj_t *pDest = cpdbRemovePrinter(frontendObj, printer_id, backend_name);
@@ -403,11 +377,9 @@ const PPDParser* CPDManager::createCPDParser(const OUString& rPrinter)
             rInfo.m_pParser = pNewParser;
             rInfo.m_aContext = rContext;
 
-            cpdbFreeOptions(options);  // Ensure to free the options after use
         }
         else
         {
-            g_clear_error(&error);
             SAL_INFO("vcl.unx.print", "CPD GetAllOptions failed, falling back to generic driver");
         }
     }
@@ -433,6 +405,7 @@ const PPDParser* CPDManager::createCPDParser(const OUString& rPrinter)
 
 void CPDManager::addPrinters(gpointer key, gpointer value, gpointer user_data){
     cpdb_printer_obj_t* pDest = static_cast<cpdb_printer_obj_t*>(value);
+    CPDManager *pManager = static_cast<CPDManager*>(user_data);
 
     std::stringstream printerName;
     printerName << pDest->name << ", " << pDest->backend_name;
@@ -444,11 +417,79 @@ void CPDManager::addPrinters(gpointer key, gpointer value, gpointer user_data){
     OUString aPrinterName = OStringToOUString(printerName.str(), aEncoding);
     OUString aUniqueName = OStringToOUString(uniqueName.str(), aEncoding);
 
-    addNewPrinter(aPrinterName, aUniqueName, pDest);
+    pManager->addNewPrinter(aPrinterName, aUniqueName, pDest);
 }
 
 void CPDManager::initialize()
 {
+
+    GMainContext *context;
+    GError *error = NULL;
+
+    gchar *bus_addr;
+    GDBusConnection *connection;
+
+    bus_addr = g_dbus_address_get_for_bus_sync(G_BUS_TYPE_SESSION,
+                                               NULL,
+                                               &error);
+
+    connection = g_dbus_connection_new_for_address_sync(bus_addr,
+                                                        (GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+                                                        G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
+                                                        NULL,
+                                                        NULL,
+                                                        &error);
+    if (error)
+    {
+        logerror("Error acquiring bus connection : %s\n", error->message);
+        frontendObj->connection = NULL;
+        return;
+    }
+    frontendObj->connection = connection;
+
+    error = NULL;
+
+    g_dbus_connection_signal_subscribe(frontendObj->connection,
+                                       NULL,                            //Sender name
+                                       "org.openprinting.PrintBackend", //Sender interface
+                                       CPDB_SIGNAL_PRINTER_ADDED,       //Signal name
+                                       NULL,                            /**match on all object paths**/
+                                       NULL,                            /**match on all arguments**/
+                                       G_DBUS_SIGNAL_FLAGS_NONE,                               //Flags
+                                       printerAdded,                //callback
+                                       NULL,                            //user_data
+                                       NULL);
+
+    g_dbus_connection_signal_subscribe(frontendObj->connection,
+                                       NULL,                            //Sender name
+                                       "org.openprinting.PrintBackend", //Sender interface
+                                       CPDB_SIGNAL_PRINTER_REMOVED,     //Signal name
+                                       NULL,                            /**match on all object paths**/
+                                       NULL,                            /**match on all arguments**/
+                                       G_DBUS_SIGNAL_FLAGS_NONE,                               //Flags
+                                       printerRemoved,              //callback
+                                       NULL,                            //user_data
+                                       NULL);
+    g_dbus_connection_signal_subscribe(frontendObj->connection,
+                                       NULL,                                //Sender name
+                                       "org.openprinting.PrintBackend",     //Sender interface
+                                       CPDB_SIGNAL_PRINTER_STATE_CHANGED,   //Signal name
+                                       NULL,                                /**match on all object paths**/
+                                       NULL,                                /**match on all arguments**/
+                                       G_DBUS_SIGNAL_FLAGS_NONE,                                   //Flags
+                                       printerStateChanged,            //callback
+                                       NULL,                                //user_data
+                                       NULL);
+
+
+    if (error)
+    {
+        logerror("Error exporting frontend interface : %s\n", error->message);
+        return;
+    }
+
+    cpdbActivateBackends(frontendObj);
+
     // get normal printers, clear printer list
     PrinterInfoManager::initialize();
 #if ENABLE_DBUS && ENABLE_GIO
@@ -545,11 +586,11 @@ FILE* CPDManager::startSpool(const OUString& rPrintername, bool bQuickCommand)
 }
 
 #if ENABLE_DBUS && ENABLE_GIO
-cpdb_settings_t CPDManager::getOptionsFromDocumentSetup(const JobData& rJob, bool bBanner,
+cpdb_settings_t* CPDManager::getOptionsFromDocumentSetup(const JobData& rJob, bool bBanner,
                                              const OString& rJobName, int& rNumOptions)
 {
 
-    cpdb_settings_t settings;
+    cpdb_settings_t *settings  = cpdbGetNewSettings();
     // Add the job name to the hash table
     g_hash_table_insert(settings->table, g_strdup("job-name"), g_strdup(rJobName.getStr()));
 
@@ -671,10 +712,10 @@ bool CPDManager::endSpool(const OUString& rPrintername, const OUString& rJobTitl
             sJobName = OUStringToOString(rFaxNumber, aEnc);
         }
         OString aSysFile = it->second;
-        cpdb_printer_obj_t pDest = dest_it->second;
+        cpdb_printer_obj_t *pDest = dest_it->second;
         GVariant* ret;
         int nNumOptions = 0;
-        cpdb_settings_t settings = getOptionsFromDocumentSetup(rDocumentJobData, bBanner, sJobName, nNumOptions);
+        cpdb_settings_t *settings = getOptionsFromDocumentSetup(rDocumentJobData, bBanner, sJobName, nNumOptions);
         pDest->settings = settings;
         char *id = cpdbPrintFile(pDest, aSysFile.getStr());
         int job_id = std::stoi(id);
@@ -698,6 +739,7 @@ bool CPDManager::endSpool(const OUString& rPrintername, const OUString& rJobTitl
 
 void CPDManager::updatePrinters(gpointer key, gpointer value, gpointer user_data){
     cpdb_printer_obj_t* pDest = static_cast<cpdb_printer_obj_t*>(value);
+    CPDManager *pManager = static_cast<CPDManager*>(user_data);
 
     std::stringstream printerName;
     printerName << pDest->name << ", " << pDest->backend_name;
@@ -710,8 +752,8 @@ void CPDManager::updatePrinters(gpointer key, gpointer value, gpointer user_data
     OUString aUniqueName = OStringToOUString(uniqueName.str(), aEncoding);
 
     // Check if the unique name is already in the map
-    if (m_aPrinters.find(aUniqueName) == m_aPrinters.end()) {
-        addNewPrinter(aPrinterName, aUniqueName, pDest);
+    if (pManager->m_aPrinters.find(aUniqueName) == pManager->m_aPrinters.end()) {
+        pManager->addNewPrinter(aPrinterName, aUniqueName, pDest);
     }
 }
 
