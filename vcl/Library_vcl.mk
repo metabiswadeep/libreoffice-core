@@ -634,6 +634,12 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
         , \
             vcl/null/printerinfomanager \
         ) \
+        $(if $(ENABLE_CPDB), \
+            vcl/unx/generic/printer/cpdmgr \
+            vcl/unx/generic/printer/printerinfomanager \
+        , \
+            vcl/null/printerinfomanager \
+        ) \
         $(vcl_headless_code) \
         $(vcl_headless_freetype_code) \
     ) \
@@ -645,6 +651,7 @@ $(eval $(call gb_Library_use_externals,vcl,\
     $(if $(USE_HEADLESS_CODE), \
         cairo \
         $(if $(ENABLE_CUPS),cups) \
+        $(if $(ENABLE_CPDB),cpdb) \
         fontconfig \
         freetype \
     ) \

@@ -2590,6 +2590,27 @@ endef
 
 endif # ENABLE_CUPS
 
+ifeq ($(ENABLE_CPDB),TRUE)
+
+define gb_LinkTarget__use_cpdb
+$(call gb_LinkTarget_add_defs,$(1),\
+    -DENABLE_CPDB \
+)
+
+$(call gb_LinkTarget_add_libs,$(1),\
+	-lcpdb \
+)
+
+endef
+
+else # ENABLE_CPDB
+
+define gb_LinkTarget__use_cpdb
+
+endef
+
+endif # ENABLE_CPDB
+
 ifeq ($(ENABLE_DBUS),TRUE)
 
 define gb_LinkTarget__use_dbus

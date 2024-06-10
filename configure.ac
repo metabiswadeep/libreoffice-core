@@ -1216,6 +1216,7 @@ fi
 
 # Set defaults, if not set by platform
 test "${test_cups+set}" = set || test_cups="$using_x11"
+test "${test_cpdb+set}" = set || test_cpdb="$using_x11"
 test "${test_dbus+set}" = set || test_dbus="$using_x11"
 test "${test_gen+set}" = set || test_gen="$using_x11"
 test "${test_gstreamer_1_0+set}" = set || test_gstreamer_1_0="$using_x11"
@@ -1247,6 +1248,7 @@ test "$using_freetype_fontconfig" = yes && test_cairo=yes
 disable_x11_tests()
 {
     test_cups=no
+    test_cpdb=no
     test_dbus=no
     test_gen=no
     test_gstreamer_1_0=no
@@ -1902,6 +1904,11 @@ AC_ARG_ENABLE(ld,
 libo_FUZZ_ARG_ENABLE(cups,
     AS_HELP_STRING([--disable-cups],
         [Do not build cups support.])
+)
+
+libo_FUZZ_ARG_ENABLE(cpdb,
+    AS_HELP_STRING([--disable-cpdb],
+        [Do not build cpdb support.])
 )
 
 AC_ARG_ENABLE(ccache,
@@ -3178,6 +3185,7 @@ if test "$enable_wasm_strip" = "yes"; then
     enable_libcmis=no
     enable_coinmp=no
     enable_cups=no
+    enable_cpdb=no
     test "$_os" = Emscripten && enable_curl=no
     enable_database_connectivity=no
     enable_dbus=no
@@ -5904,6 +5912,7 @@ if test "$cross_compiling" = "yes"; then
         --build="$build_alias" \
         --disable-cairo-canvas \
         --disable-cups \
+        --disable-cpdb \
         --disable-customtarget-components \
         --disable-firebird-sdbc \
         --disable-gpgmepp \
@@ -6265,6 +6274,27 @@ else
 fi
 
 AC_SUBST(ENABLE_CUPS)
+
+dnl ===================================================================
+dnl check for cpdb support
+dnl ===================================================================
+
+AC_MSG_CHECKING([whether to enable CPDB support])
+if test "$test_cpdb" = yes -a "$enable_cpdb" != no; then
+    ENABLE_CPDB=TRUE
+    AC_MSG_RESULT([yes])
+
+    AC_MSG_CHECKING([whether cpdb support is present])
+    AC_CHECK_LIB([cpdb-libs], [:])
+    AC_CHECK_HEADER(cpdb/frontend.h, AC_DEFINE(HAVE_CPDB_FRONTEND_H))
+    if test "$ac_cv_header_cpdb_frontend_h" != "yes"; then
+        AC_MSG_ERROR([Could not find CPDB. Install cpdb first.])
+    fi
+else
+    AC_MSG_RESULT([no])
+fi
+
+AC_SUBST(ENABLE_CPDB)
 
 libo_CHECK_SYSTEM_MODULE([fontconfig],[FONTCONFIG],[fontconfig >= 2.12.0],,system,TRUE)
 
