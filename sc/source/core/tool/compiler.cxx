@@ -74,6 +74,8 @@
 #include <scmatrix.hxx>
 #include <tokenstringcontext.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <sfx2/linkmgr.hxx>
+#include <interpre.hxx>
 
 using namespace formula;
 using namespace ::com::sun::star;
@@ -3651,6 +3653,29 @@ bool ScCompiler::ParseNamedRange( const OUString& rUpperName, bool onlyCheck )
     return false;
 }
 
+bool ScCompiler::ParseLambdaFuncName( const OUString& aOrg )
+{
+    if (m_aLambda.bInLambdaFunction && !aOrg.isEmpty())
+    {
+        OUString aName = aOrg;
+        if (aOrg.startsWithIgnoreAsciiCase(u"_xlpm."))
+            aName = aName.copy(6);
+
+        if (m_aLambda.nParaPos % 2 == 1 && m_aLambda.nParaCount > m_aLambda.nParaPos)
+            m_aLambda.aNameSet.insert(aName);
+        else
+        {
+            // should already exist the name
+            if (m_aLambda.aNameSet.find(aName) == m_aLambda.aNameSet.end())
+                return false;
+        }
+        svl::SharedString aSS = rDoc.GetSharedStringPool().intern(aName);
+        maRawToken.SetStringName(aSS.getData(), aSS.getDataIgnoreCase());
+        return true;
+    }
+    return false;
+}
+
 bool ScCompiler::ParseExternalNamedRange( const OUString& rSymbol, bool& rbInvalidExternalNameRange )
 {
     /* FIXME: This code currently (2008-12-02T15:41+0100 in CWS mooxlsc)
@@ -4346,6 +4371,36 @@ bool ScCompiler::ToUpperAsciiOrI18nIsAscii( OUString& rUpper, const OUString& rO
     }
 }
 
+short ScCompiler::GetPossibleParaCount( const std::u16string_view& rLambdaFormula ) const
+{
+    sal_Unicode cSep = mxSymbols->getSymbolChar(ocSep);
+    sal_Unicode cOpen = mxSymbols->getSymbolChar(ocOpen);
+    sal_Unicode cClose = mxSymbols->getSymbolChar(ocClose);
+    sal_Unicode cArrayOpen = mxSymbols->getSymbolChar(ocArrayOpen);
+    sal_Unicode cArrayClose = mxSymbols->getSymbolChar(ocArrayClose);
+    short nBrackets = 0;
+
+    short nCount = std::count_if(rLambdaFormula.begin(), rLambdaFormula.end(),
+        [&](sal_Unicode c) {
+            if (c == cOpen || c == cArrayOpen || c == '[') {
+                nBrackets++;
+                return false;
+            }
+            else if (c == cClose || c == cArrayClose || c == ']') {
+                nBrackets--;
+                return false;
+            }
+            else {
+                if (nBrackets == 1)
+                    return c == cSep;
+                else
+                    return false;
+            }
+        });
+
+    return static_cast<short>(nCount + 1);
+}
+
 bool ScCompiler::NextNewToken( bool bInArray )
 {
     if (!maPendingOpCodes.empty())
@@ -4613,6 +4668,9 @@ Label_Rewind:
         if (bMayBeFuncName && ParseOpCode2( aUpper ))
             return true;
 
+        if (ParseLambdaFuncName( aOrg ))
+            return true;
+
     } while (mbRewind);
 
     // Last chance: it could be a broken invalidated reference that contains
@@ -4743,6 +4801,14 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
         {
             case ocOpen:
             {
+                if (eLastOp == ocLet)
+                {
+                    m_aLambda.bInLambdaFunction = true;
+                    m_aLambda.nBracketPos = nBrackets;
+                    m_aLambda.nParaPos++;
+                    m_aLambda.nParaCount = GetPossibleParaCount(rFormula.subView(nSrcPos - 1));
+                }
+
                 ++nBrackets;
                 if (bUseFunctionStack)
                 {
@@ -4765,7 +4831,14 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
                     }
                 }
                 else
+                {
                     nBrackets--;
+                    if (m_aLambda.bInLambdaFunction && m_aLambda.nBracketPos == nBrackets)
+                    {
+                        m_aLambda.bInLambdaFunction = false;
+                        m_aLambda.nBracketPos = nBrackets;
+                    }
+                }
                 if (bUseFunctionStack && nFunction)
                     --nFunction;
             }
@@ -4774,6 +4847,9 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
             {
                 if (bUseFunctionStack)
                     ++pFunctionStack[ nFunction ].nSep;
+
+                if (m_aLambda.bInLambdaFunction && m_aLambda.nBracketPos + 1 == nBrackets)
+                    m_aLambda.nParaPos++;
             }
             break;
             case ocArrayOpen:
@@ -5031,6 +5107,14 @@ std::unique_ptr<ScTokenArray> ScCompiler::CompileString( const OUString& rFormul
 ScRangeData* ScCompiler::GetRangeData( const FormulaToken& rToken ) const
 {
     return rDoc.FindRangeNameBySheetAndIndex( rToken.GetSheet(), rToken.GetIndex());
+}
+
+bool ScCompiler::HandleStringName()
+{
+    ScTokenArray* pNew = new ScTokenArray(rDoc);
+    pNew->AddString(mpToken->GetString());
+    PushTokenArray(pNew, true);
+    return GetToken();
 }
 
 bool ScCompiler::HandleRange()

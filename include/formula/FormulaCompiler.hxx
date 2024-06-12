@@ -344,6 +344,7 @@ protected:
     virtual void SetError(FormulaError nError);
     virtual FormulaTokenRef ExtendRangeReference( FormulaToken & rTok1, FormulaToken & rTok2 );
     virtual bool HandleExternalReference(const FormulaToken& _aToken);
+    virtual bool HandleStringName();
     virtual bool HandleRange();
     virtual bool HandleColRowName();
     virtual bool HandleDbData();
@@ -418,6 +419,15 @@ protected:
 
     bool mbComputeII;  // whether to attempt computing implicit intersection ranges while building the RPN array.
     bool mbMatrixFlag; // whether the formula is a matrix formula (needed for II computation)
+
+    struct LambdaFunc
+    {
+        bool bInLambdaFunction = false;
+        short nBracketPos = 0;
+        short nParaPos = 0;
+        short nParaCount = 3; // minimum required parameter count: 3
+        std::unordered_set<OUString> aNameSet;
+    } m_aLambda;
 
 public:
     enum InitSymbols

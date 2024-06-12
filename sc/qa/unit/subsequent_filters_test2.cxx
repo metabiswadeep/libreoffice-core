@@ -249,6 +249,19 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testTdf153767)
     CPPUNIT_ASSERT_EQUAL(u"FALSE"_ustr, pDoc->GetString(ScAddress(7, 2, 0)));
 }
 
+CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testTdf161301)
+{
+    createScDoc("xlsx/tdf161301.xlsx");
+
+    ScDocument* pDoc = getScDoc();
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: CE784年2月20日
+    // - Actual  : 45440
+    CPPUNIT_ASSERT_EQUAL(u"CE784年2月20日"_ustr, pDoc->GetString(ScAddress(1, 0, 0)));
+    CPPUNIT_ASSERT_EQUAL(u"CE784年2月20日"_ustr, pDoc->GetString(ScAddress(1, 1, 0)));
+}
+
 CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testTdf124454)
 {
     createScDoc("ods/tdf124454.ods");
@@ -715,6 +728,19 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testErrorOnExternalReferences)
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Formula changed",
                                  u"='file:///Path/To/FileA.ods'#$Sheet1.A1A"_ustr,
                                  pDoc->GetFormula(0, 0, 0));
+}
+
+CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testTdf160371)
+{
+    createScDoc("xlsx/tdf160371.xlsx");
+
+    ScDocument* pDoc = getScDoc();
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: =INDIRECT(B2)!INDIRECT(B3)
+    // - Actual  : =INDIRECT(B2) INDIRECT(B3)
+    CPPUNIT_ASSERT_EQUAL(u"=INDIRECT(B2)!INDIRECT(B3)"_ustr, pDoc->GetFormula(1, 3, 0));
+    CPPUNIT_ASSERT_EQUAL(1.0, pDoc->GetValue(ScAddress(1, 3, 0)));
 }
 
 CPPUNIT_TEST_FIXTURE(ScFiltersTest2, testTdf145054)

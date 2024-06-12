@@ -307,6 +307,7 @@ private:
     OUString m_sHyperlinkURL;
     /// A frame for the hyperlink when one exists.
     OUString m_sHyperlinkTarget;
+    OUString m_sHyperlinkName;
     OUString m_sHyperlinkStyle;
 
     FFDataHandler::Pointer_t m_pFFDataHandler;
@@ -359,6 +360,8 @@ public:
     const OUString& GetHyperlinkURL() const { return m_sHyperlinkURL; }
     void SetHyperlinkTarget(const OUString& rTarget) { m_sHyperlinkTarget = rTarget; }
     const OUString& GetHyperlinkTarget() const { return m_sHyperlinkTarget; }
+    void SetHyperlinkName(const OUString& rName) { m_sHyperlinkName = rName; }
+    const OUString& GetHyperlinkName() const { return m_sHyperlinkName; }
     void  SetHyperlinkStyle(const OUString& rStyle) { m_sHyperlinkStyle = rStyle; }
     const OUString& GetHyperlinkStyle() const { return m_sHyperlinkStyle; }
 
@@ -552,7 +555,7 @@ private:
     css::uno::Reference<css::text::XText> m_xBodyText;
 
     std::stack<TextAppendContext>                                                   m_aTextAppendStack;
-    std::stack<AnchoredContext>                                                     m_aAnchoredStack;
+    std::vector<AnchoredContext> m_vAnchoredStack;
 public: // DomainMapper needs it
     std::stack<SubstreamContext> m_StreamStateStack;
 private:
@@ -903,7 +906,7 @@ public:
     bool        IsNumberingImport() const { return m_bInNumberingImport;}
     void        SetAnyTableImport( bool bSet ) { m_bInAnyTableImport = bSet;}
     bool        IsAnyTableImport()const { return m_bInAnyTableImport;}
-    bool        IsInShape()const { return m_aAnchoredStack.size() > 0;}
+    bool        IsInShape()const { return m_vAnchoredStack.size() > 0;}
 
     void PushShapeContext(const css::uno::Reference<css::drawing::XShape>& xShape);
     void PopShapeContext();
@@ -1233,6 +1236,9 @@ public:
 
     /// Handles <w:br w:clear="...">.
     void HandleLineBreakClear(sal_Int32 nClear);
+
+    /// Checks if we have a pending <w:br w:clear="...">.
+    bool HasLineBreakClear() const;
 
     /// Handles <w:br>.
     void HandleLineBreak(const PropertyMapPtr& pPropertyMap);

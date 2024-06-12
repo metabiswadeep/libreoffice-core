@@ -146,11 +146,11 @@ void ScViewFunc::PasteDraw( const Point& rLogicPos, SdrModel* pModel,
                 ScChartHelper::GetChartNames( aExcludedChartNames, pDestPage );
             }
 
-            SdrMarkList aMark = pDragEditView->GetMarkedObjectList();
-            aMark.ForceSort();
-            const size_t nMarkCnt=aMark.GetMarkCount();
+            const SdrMarkList& rMarkList = pDragEditView->GetMarkedObjectList();
+            rMarkList.ForceSort();
+            const size_t nMarkCnt=rMarkList.GetMarkCount();
             for (size_t nm=0; nm<nMarkCnt; ++nm) {
-                const SdrMark* pM=aMark.GetMark(nm);
+                const SdrMark* pM=rMarkList.GetMark(nm);
                 const SdrObject* pObj=pM->GetMarkedSdrObj();
 
                 // Directly Clone to target SdrModel
@@ -372,13 +372,13 @@ bool ScViewFunc::PasteObject( const Point& rPos, const uno::Reference < embed::X
 bool ScViewFunc::PasteBitmapEx( const Point& rPos, const BitmapEx& rBmpEx )
 {
     Graphic aGraphic(rBmpEx);
-    return PasteGraphic( rPos, aGraphic, "" );
+    return PasteGraphic( rPos, aGraphic, u""_ustr );
 }
 
 bool ScViewFunc::PasteMetaFile( const Point& rPos, const GDIMetaFile& rMtf )
 {
     Graphic aGraphic(rMtf);
-    return PasteGraphic( rPos, aGraphic, "" );
+    return PasteGraphic( rPos, aGraphic, u""_ustr );
 }
 
 bool ScViewFunc::PasteGraphic( const Point& rPos, const Graphic& rGraphic,

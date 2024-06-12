@@ -23,7 +23,6 @@
 #include <svl/stylesheetuser.hxx>
 #include <vcl/prntypes.hxx>
 #include <svl/itemset.hxx>
-#include <svx/annotation/Annotation.hxx>
 #include <svx/sdrpageuser.hxx>
 #include <svx/sdr/contact/viewobjectcontactredirector.hxx>
 #include <svx/sdrmasterpagedescriptor.hxx>
@@ -41,6 +40,7 @@
 namespace model { class Theme; }
 namespace reportdesign { class OSection; }
 namespace sdr::contact { class ViewContact; }
+namespace sdr::annotation { class Annotation; }
 class SdrPage;
 class SdrModel;
 class SfxItemPool;
@@ -555,11 +555,14 @@ public:
 
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 
-    virtual rtl::Reference<sdr::annotation::Annotation> createAnnotation() { assert(false); return nullptr; }
-    virtual void addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& /*xAnnotation*/, int /*nIndex*/) { assert(false); }
-    virtual void removeAnnotation(rtl::Reference<sdr::annotation::Annotation> const& /*xAnnotation*/) { assert(false); }
+    // Annotations
+    virtual rtl::Reference<sdr::annotation::Annotation> createAnnotation();
+    virtual void addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);
+    virtual void addAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);
+    virtual void removeAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation);
+    virtual void removeAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation);
 
-    std::vector<rtl::Reference<sdr::annotation::Annotation>> const& getAnnotations() const { return maAnnotations; }
+    std::vector<rtl::Reference<sdr::annotation::Annotation>> const& getAnnotations() const;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

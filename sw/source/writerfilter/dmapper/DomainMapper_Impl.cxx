@@ -3469,9 +3469,9 @@ void DomainMapper_Impl::appendOLE( const OUString& rStreamName, const std::share
             // gives a better ( visually ) result
             xOLE->setPropertyValue(getPropertyName( PROP_ANCHOR_TYPE ),  uno::Any( text::TextContentAnchorType_AS_CHARACTER ) );
         // remove ( if valid ) associated shape ( used for graphic replacement )
-        SAL_WARN_IF(m_aAnchoredStack.empty(), "writerfilter.dmapper", "no anchor stack");
-        if (!m_aAnchoredStack.empty())
-            m_aAnchoredStack.top( ).bToRemove = true;
+        SAL_WARN_IF(m_vAnchoredStack.empty(), "writerfilter.dmapper", "no anchor stack");
+        if (!m_vAnchoredStack.empty())
+            m_vAnchoredStack.back().bToRemove = true;
         RemoveLastParagraph();
         SAL_WARN_IF(m_aTextAppendStack.empty(), "writerfilter.dmapper", "no text stack");
         if (!m_aTextAppendStack.empty())
@@ -4737,14 +4737,14 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
             // shapes for OLE objects.
             m_aTextAppendStack.push(TextAppendContext(uno::Reference<text::XTextAppend>(xShape, uno::UNO_QUERY), uno::Reference<text::XTextCursor>()));
             uno::Reference<text::XTextContent> xTxtContent(xShape, uno::UNO_QUERY);
-            m_aAnchoredStack.push(AnchoredContext(xTxtContent));
+            m_vAnchoredStack.push_back(AnchoredContext(xTxtContent));
         }
         else if (xSInfo->supportsService(u"com.sun.star.drawing.OLE2Shape"_ustr))
         {
             // OLE2Shape from oox should be converted to a TextEmbeddedObject for sw.
             m_aTextAppendStack.push(TextAppendContext(uno::Reference<text::XTextAppend>(xShape, uno::UNO_QUERY), uno::Reference<text::XTextCursor>()));
             uno::Reference<text::XTextContent> xTextContent(xShape, uno::UNO_QUERY);
-            m_aAnchoredStack.push(AnchoredContext(xTextContent));
+            m_vAnchoredStack.push_back(AnchoredContext(xTextContent));
             uno::Reference<beans::XPropertySet> xShapePropertySet(xShape, uno::UNO_QUERY);
 
             rtl::Reference<SwXTextEmbeddedObject> xEmbedded = m_xTextDocument->createTextEmbeddedObject();
@@ -4752,7 +4752,7 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
             xEmbedded->setPropertyValue(getPropertyName(PROP_EMBEDDED_OBJECT), xShapePropertySet->getPropertyValue(getPropertyName(PROP_EMBEDDED_OBJECT)));
             xEmbedded->setPropertyValue(getPropertyName(PROP_ANCHOR_TYPE), uno::Any(text::TextContentAnchorType_AS_CHARACTER));
             // So that the original bitmap-only shape will be replaced by the embedded object.
-            m_aAnchoredStack.top().bToRemove = true;
+            m_vAnchoredStack.back().bToRemove = true;
             m_aTextAppendStack.pop();
             appendTextContent(m_StreamStateStack.top().xEmbedded, uno::Sequence<beans::PropertyValue>());
         }
@@ -4772,21 +4772,21 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
 
             // Add the shape to the anchored objects stack
             uno::Reference< text::XTextContent > xTxtContent( xShape, uno::UNO_QUERY_THROW );
-            m_aAnchoredStack.push( AnchoredContext(xTxtContent) );
+            m_vAnchoredStack.push_back(AnchoredContext(xTxtContent));
 
-            uno::Reference< beans::XPropertySet > xProps( xShape, uno::UNO_QUERY_THROW );
+            uno::Reference<beans::XPropertySet> xShapePropertySet(xShape, uno::UNO_QUERY_THROW);
 #ifdef DBG_UTIL
-            TagLogger::getInstance().unoPropertySet(xProps);
+            TagLogger::getInstance().unoPropertySet(xShapePropertySet);
 #endif
             text::TextContentAnchorType nAnchorType(text::TextContentAnchorType_AT_PARAGRAPH);
-            xProps->getPropertyValue(getPropertyName( PROP_ANCHOR_TYPE )) >>= nAnchorType;
+            xShapePropertySet->getPropertyValue(getPropertyName(PROP_ANCHOR_TYPE)) >>= nAnchorType;
             bool checkZOrderStatus = false;
+            GraphicZOrderHelper& rZOrderHelper = m_rDMapper.graphicZOrderHelper();
             if (xSInfo->supportsService(u"com.sun.star.text.TextFrame"_ustr))
             {
                 SetIsTextFrameInserted(true);
                 // Extract the special "btLr text frame" mode, requested by oox, if needed.
                 // Extract vml ZOrder from FrameInteropGrabBag
-                uno::Reference<beans::XPropertySet> xShapePropertySet(xShape, uno::UNO_QUERY);
                 uno::Sequence<beans::PropertyValue> aGrabBag;
                 xShapePropertySet->getPropertyValue(u"FrameInteropGrabBag"_ustr) >>= aGrabBag;
 
@@ -4794,7 +4794,6 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
                 {
                     if (rProp.Name == "VML-Z-ORDER")
                     {
-                        GraphicZOrderHelper& rZOrderHelper = m_rDMapper.graphicZOrderHelper();
                         sal_Int64 zOrder(0);
                         rProp.Value >>= zOrder;
                         GraphicZOrderHelper::adjustRelativeHeight(zOrder, /*IsZIndex=*/true,
@@ -4830,18 +4829,45 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
                 PropertyMapPtr paragraphContext = GetTopContextOfType( CONTEXT_PARAGRAPH );
                 std::optional<PropertyMap::Property> aPropMargin = paragraphContext->getProperty(PROP_PARA_BOTTOM_MARGIN);
                 if(aPropMargin)
-                    xProps->setPropertyValue( getPropertyName( PROP_BOTTOM_MARGIN ), aPropMargin->second );
+                    xShapePropertySet->setPropertyValue(getPropertyName(PROP_BOTTOM_MARGIN),
+                                                        aPropMargin->second);
+
+                sal_Int64 zOrder = SAL_MIN_INT64; // lowest in heaven-layer: AS_CHAR in body text
+                // AS_CHARs anchored inside a fly should be just above the fly's zOrder
+                if (m_vAnchoredStack.size() > 1)
+                {
+                    uno::Reference<beans::XPropertySet> xParentPropertySet(
+                        m_vAnchoredStack[m_vAnchoredStack.size() - 2].xTextContent,
+                        uno::UNO_QUERY_THROW);
+                    uno::Sequence<beans::PropertyValue> aGrabBag;
+                    xParentPropertySet->getPropertyValue(u"FrameInteropGrabBag"_ustr) >>= aGrabBag;
+                    for (const auto& rProp : aGrabBag)
+                    {
+                        if (rProp.Name == "VML-Z-ORDER")
+                        {
+                            rProp.Value >>= zOrder;
+                            ++zOrder;
+                            GraphicZOrderHelper::adjustRelativeHeight(zOrder, /*IsZIndex=*/true,
+                                                                      zOrder < 0,
+                                                                      IsInHeaderFooter());
+                            xShapePropertySet->setPropertyValue(getPropertyName(PROP_OPAQUE),
+                                                                uno::Any(zOrder >= 0));
+                        }
+                    }
+                }
+                xShapePropertySet->setPropertyValue(u"ZOrder"_ustr,
+                    uno::Any(rZOrderHelper.findZOrder(zOrder, /*LastDuplicateWins*/true)));
+                rZOrderHelper.addItem(xShapePropertySet, zOrder);
+                checkZOrderStatus = true;
             }
             else
             {
-                uno::Reference<beans::XPropertySet> xShapePropertySet(xShape, uno::UNO_QUERY);
                 uno::Sequence<beans::PropertyValue> aGrabBag;
                 xShapePropertySet->getPropertyValue(u"InteropGrabBag"_ustr) >>= aGrabBag;
                 for (const auto& rProp : aGrabBag)
                 {
                     if (rProp.Name == "VML-Z-ORDER")
                     {
-                        GraphicZOrderHelper& rZOrderHelper = m_rDMapper.graphicZOrderHelper();
                         sal_Int64 zOrder(0);
                         rProp.Value >>= zOrder;
                         GraphicZOrderHelper::adjustRelativeHeight(zOrder, /*IsZIndex=*/true,
@@ -4879,9 +4905,7 @@ void DomainMapper_Impl::PushShapeContext( const uno::Reference< drawing::XShape 
                 }
             }
             if (!IsInHeaderFooter() && !checkZOrderStatus)
-                xProps->setPropertyValue(
-                        getPropertyName( PROP_OPAQUE ),
-                        uno::Any( true ) );
+                xShapePropertySet->setPropertyValue(getPropertyName(PROP_OPAQUE), uno::Any(true));
         }
         m_StreamStateStack.top().bParaChanged = true;
         getTableManager().setIsInShape(true);
@@ -4931,19 +4955,19 @@ void DomainMapper_Impl::PopShapeContext()
         getTableManager().endLevel();
         popTableManager();
     }
-    if ( m_aAnchoredStack.empty() )
+    if (m_vAnchoredStack.empty())
         return;
 
     // For OLE object replacement shape, the text append context was already removed
     // or the OLE object couldn't be inserted.
-    if ( !m_aAnchoredStack.top().bToRemove )
+    if (!m_vAnchoredStack.back().bToRemove)
     {
         RemoveLastParagraph();
         if (!m_aTextAppendStack.empty())
             m_aTextAppendStack.pop();
     }
 
-    uno::Reference< text::XTextContent > xObj = m_aAnchoredStack.top( ).xTextContent;
+    uno::Reference<text::XTextContent> xObj = m_vAnchoredStack.back().xTextContent;
     try
     {
         appendTextContent( xObj, uno::Sequence< beans::PropertyValue >() );
@@ -4956,7 +4980,7 @@ void DomainMapper_Impl::PopShapeContext()
     const uno::Reference<drawing::XShape> xShape( xObj, uno::UNO_QUERY_THROW );
     // Remove the shape if required (most likely replacement shape for OLE object)
     // or anchored to a discarded header or footer
-    if ( m_xTextDocument && (m_aAnchoredStack.top().bToRemove || m_bDiscardHeaderFooter) )
+    if (m_xTextDocument && (m_vAnchoredStack.back().bToRemove || m_bDiscardHeaderFooter))
     {
         try
         {
@@ -4993,7 +5017,7 @@ void DomainMapper_Impl::PopShapeContext()
         }
     }
 
-    m_aAnchoredStack.pop();
+    m_vAnchoredStack.pop_back();
 }
 
 bool DomainMapper_Impl::IsSdtEndBefore()
@@ -5174,6 +5198,11 @@ void DomainMapper_Impl::HandleLineBreakClear(sal_Int32 nClear)
             m_StreamStateStack.top().oLineBreakClear = 3;
             break;
     }
+}
+
+bool DomainMapper_Impl::HasLineBreakClear() const
+{
+    return m_StreamStateStack.top().oLineBreakClear.has_value();
 }
 
 void DomainMapper_Impl::HandleLineBreak(const PropertyMapPtr& pPropertyMap)
@@ -6093,6 +6122,7 @@ void FieldContext::AppendCommand(std::u16string_view rPart)
     ::std::vector<OUString> aResult;
     sal_Int32 nIndex = 0;
     bool bInString = false;
+    bool bScreenTip = false;
     OUString sPart;
     while (nIndex != -1)
     {
@@ -6102,16 +6132,50 @@ void FieldContext::AppendCommand(std::u16string_view rPart)
         if (sToken.isEmpty())
             continue;
 
-        if (sToken[0] == '"')
+        if (bScreenTip)
         {
-            bInStringNext = true;
-            sToken = sToken.copy(1);
+            bool bRemoveQuotation = true;
+            bInStringNext = (nIndex != -1) ? true : false;
+
+            if (sToken[0] == '"' && !bInString)
+                sToken = sToken.copy(1);
+
+            if (!sToken.isEmpty())
+            {
+                if (sToken[0] == '\\')
+                {
+                    bRemoveQuotation = false;
+                    OUStringBuffer sBuffer;
+                    for (sal_Int32 i = 0; i < sToken.getLength(); ++i)
+                    {
+                        if (sToken[i] != '\\')
+                        {
+                            sBuffer.append(sToken[i]);
+                        }
+                    }
+                    sToken = sBuffer.makeStringAndClear();
+                }
+            }
+
+            if (!bInStringNext && bRemoveQuotation)
+                sToken = sToken.copy(0, sToken.getLength() - 1);
         }
-        if (sToken.endsWith("\""))
+        else
         {
-            bInStringNext = false;
-            sToken = sToken.copy(0, sToken.getLength() - 1);
+            if (sToken[0] == '"')
+            {
+                bInStringNext = true;
+                sToken = sToken.copy(1);
+            }
+            if (sToken.endsWith("\""))
+            {
+                bInStringNext = false;
+                sToken = sToken.copy(0, sToken.getLength() - 1);
+            }
         }
+
+        if (sToken == "\\o")
+            bScreenTip = true;
 
         if (bInString)
         {
@@ -7837,6 +7901,7 @@ void DomainMapper_Impl::CloseFieldCommand()
 
                     OUString sURL;
                     OUString sTarget;
+                    OUString sName;
 
                     while (aPartIt != aItEnd)
                     {
@@ -7852,7 +7917,7 @@ void DomainMapper_Impl::CloseFieldCommand()
                         else if (*aPartIt == "\\m" || *aPartIt == "\\n" || *aPartIt == "\\h")
                         {
                         }
-                        else if ( *aPartIt == "\\o" || *aPartIt == "\\t" )
+                        else if (*aPartIt == "\\t")
                         {
                             ++aPartIt;
 
@@ -7860,6 +7925,15 @@ void DomainMapper_Impl::CloseFieldCommand()
                                 break;
 
                             sTarget = *aPartIt;
+                        }
+                        else if (*aPartIt == "\\o")
+                        {
+                            ++aPartIt;
+
+                            if (aPartIt == aItEnd)
+                                break;
+
+                            sName = *aPartIt;
                         }
                         else
                         {
@@ -7900,6 +7974,8 @@ void DomainMapper_Impl::CloseFieldCommand()
 
                     if (!sTarget.isEmpty())
                         pContext->SetHyperlinkTarget(sTarget);
+                    if (!sName.isEmpty())
+                        pContext->SetHyperlinkName(sName);
                 }
                 break;
                 case FIELD_IF:
@@ -8023,11 +8099,29 @@ void DomainMapper_Impl::CloseFieldCommand()
                                 getPropertyName(PROP_REFERENCE_FIELD_SOURCE),
                                 uno::Any(sal_Int16(text::ReferenceFieldSource::STYLE)));
 
-                            uno::Any aStyleDisplayName;
-                            aStyleDisplayName <<= ConvertTOCStyleName(sFirstParam);
+                            OUString styleName(sFirstParam);
+                            if (styleName.isEmpty())
+                            {
+                                for (auto const& rSwitch : vSwitches)
+                                {
+                                    // undocumented Word feature: \1 = "Heading 1" etc.
+                                    if (rSwitch.getLength() == 2 && rSwitch[0] == '\\'
+                                        && '1' <= rSwitch[1] && rSwitch[1] <= '9')
+                                    {
+                                        styleName = OUString(rSwitch[1]);
+                                        break;
+                                    }
+                                }
+                            }
 
-                            xFieldProperties->setPropertyValue(
-                                getPropertyName(PROP_SOURCE_NAME), aStyleDisplayName);
+                            if (!styleName.isEmpty())
+                            {
+                                uno::Any aStyleDisplayName;
+                                aStyleDisplayName <<= ConvertTOCStyleName(styleName);
+
+                                xFieldProperties->setPropertyValue(
+                                    getPropertyName(PROP_SOURCE_NAME), aStyleDisplayName);
+                            }
 
                             sal_uInt16 nFlags = 0;
                             OUString sValue;
@@ -8793,6 +8887,8 @@ void DomainMapper_Impl::PopFieldContext()
 
                                 if (!pContext->GetHyperlinkTarget().isEmpty())
                                     xCrsrProperties->setPropertyValue(u"HyperLinkTarget"_ustr, uno::Any(pContext->GetHyperlinkTarget()));
+                                if (!pContext->GetHyperlinkName().isEmpty())
+                                    xCrsrProperties->setPropertyValue(u"HyperLinkName"_ustr, uno::Any(pContext->GetHyperlinkName()));
 
                                 if (IsInTOC())
                                 {

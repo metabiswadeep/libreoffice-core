@@ -44,8 +44,8 @@ ScNameDlg::ScNameDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* pParen
         ScViewData&  rViewData,
         const ScAddress&  aCursorPos,
         std::map<OUString, ScRangeName> *const pRangeMap)
-    : ScAnyRefDlgController(pB, pCW, pParent, "modules/scalc/ui/managenamesdialog.ui",
-                            "ManageNamesDialog")
+    : ScAnyRefDlgController(pB, pCW, pParent, u"modules/scalc/ui/managenamesdialog.ui"_ustr,
+                            u"ManageNamesDialog"_ustr)
 
     , maGlobalNameStr(ScResId(STR_GLOBAL_SCOPE))
     , maErrInvalidNameStr(ScResId(STR_ERR_NAME_INVALID))
@@ -72,6 +72,7 @@ ScNameDlg::ScNameDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* pParen
     , m_xBtnOk(m_xBuilder->weld_button("ok"))
     , m_xBtnCancel(m_xBuilder->weld_button("cancel"))
     , m_xFtInfo(m_xBuilder->weld_label("info"))
+    , m_xExpander(m_xBuilder->weld_expander("more"))
 {
     m_xEdAssign->SetReferences(this, m_xFtAssign.get());
     m_xRbAssign->SetReferences(this, m_xEdAssign.get());
@@ -101,7 +102,7 @@ void ScNameDlg::Init()
 {
     //init UI
 
-    std::unique_ptr<weld::TreeView> xTreeView(m_xBuilder->weld_tree_view("names"));
+    std::unique_ptr<weld::TreeView> xTreeView(m_xBuilder->weld_tree_view(u"names"_ustr));
     xTreeView->set_size_request(xTreeView->get_approximate_digit_width() * 75,
                                 xTreeView->get_height_rows(10));
     m_xRangeManagerTable.reset(new ScRangeManagerTable(std::move(xTreeView), m_RangeMap, maCursorPos));

@@ -111,6 +111,8 @@
 #include <optsitem.hxx>
 
 #include <vcl/pdfextoutdevdata.hxx>
+#include <vcl/pdf/PDFNote.hxx>
+
 #include <com/sun/star/presentation/AnimationSpeed.hpp>
 #include <com/sun/star/presentation/ClickAction.hpp>
 #include <svx/sdr/contact/viewobjectcontact.hxx>
@@ -1615,31 +1617,52 @@ static void ImplPDFExportComments( const uno::Reference< drawing::XDrawPage >& x
 
         while( xAnnotationEnumeration->hasMoreElements() )
         {
-            uno::Reference< office::XAnnotation > xAnnotation( xAnnotationEnumeration->nextElement() );
+            uno::Reference<office::XAnnotation> xAnnotation(xAnnotationEnumeration->nextElement());
 
-            geometry::RealPoint2D aRealPoint2D( xAnnotation->getPosition() );
+            geometry::RealPoint2D aRealPoint2D(xAnnotation->getPosition());
             geometry::RealSize2D aRealSize2D(xAnnotation->getSize());
-            uno::Reference< text::XText > xText( xAnnotation->getTextRange() );
 
-            vcl::PDFNote aNote;
-            aNote.Title = xAnnotation->getAuthor();
-            aNote.Contents = xText->getString();
+            Point aPoint(aRealPoint2D.X * 100.0, aRealPoint2D.Y * 100.0);
+            Size aSize(aRealSize2D.Width * 100.0, aRealSize2D.Height * 100.0);
+
+            uno::Reference<text::XText> xText(xAnnotation->getTextRange());
+
+            vcl::pdf::PDFNote aNote;
+            aNote.maTitle = xAnnotation->getAuthor();
+            aNote.maContents = xText->getString();
             aNote.maModificationDate = xAnnotation->getDateTime();
             auto* pAnnotation = dynamic_cast<sd::Annotation*>(xAnnotation.get());
-            aNote.isFreeText = pAnnotation && pAnnotation->isFreeText();
-            if (pAnnotation && pAnnotation->hasCustomAnnotationMarker())
+
+            if (pAnnotation && pAnnotation->getCreationInfo().meType != sdr::annotation::AnnotationType::None)
             {
-                aNote.maPolygons = pAnnotation->getCustomAnnotationMarker().maPolygons;
-                aNote.annotColor = pAnnotation->getCustomAnnotationMarker().maLineColor;
-                aNote.interiorColor = pAnnotation->getCustomAnnotationMarker().maFillColor;
+                sdr::annotation::CreationInfo const& rCreation = pAnnotation->getCreationInfo();
+                aNote.maPolygons = rCreation.maPolygons;
+                aNote.maAnnotationColor = rCreation.maColor;
+                aNote.maInteriorColor = rCreation.maFillColor;
+                aNote.mfWidth = rCreation.mnWidth;
+                switch (rCreation.meType)
+                {
+                    case sdr::annotation::AnnotationType::Square:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Square; break;
+                    case sdr::annotation::AnnotationType::Circle:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Circle; break;
+                    case sdr::annotation::AnnotationType::Polygon:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Polygon; break;
+                    case sdr::annotation::AnnotationType::Ink:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Ink; break;
+                    case sdr::annotation::AnnotationType::Highlight:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Highlight; break;
+                    case sdr::annotation::AnnotationType::Line:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Line; break;
+                    case sdr::annotation::AnnotationType::FreeText:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::FreeText; break;
+                    default:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Text;
+                        break;
+                }
             }
 
-            rPDFExtOutDevData.CreateNote(
-                ::tools::Rectangle(Point(static_cast<::tools::Long>(aRealPoint2D.X * 100),
-                                         static_cast<::tools::Long>(aRealPoint2D.Y * 100)),
-                                   Size(static_cast<::tools::Long>(aRealSize2D.Width * 100),
-                                        static_cast<::tools::Long>(aRealSize2D.Height * 100))),
-                aNote);
+            rPDFExtOutDevData.CreateNote(::tools::Rectangle(aPoint, aSize), aNote);
         }
     }
     catch (const uno::Exception&)
@@ -3787,26 +3810,25 @@ rtl::Reference< SdXImpressDocument > SdXImpressDocument::GetModel( SdDrawDocumen
     return xRet;
 }
 
-void NotifyDocumentEvent( SdDrawDocument const & rDocument, const OUString& rEventName )
+void NotifyDocumentEvent(SdDrawDocument const & rDocument, const OUString& rEventName)
 {
-    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( rDocument ) );
+    rtl::Reference<SdXImpressDocument> xModel(SdXImpressDocument::GetModel(rDocument));
 
-    if( xModel.is() )
+    if (xModel.is())
     {
-        uno::Reference< uno::XInterface > xSource( static_cast<uno::XWeak*>( xModel.get() ) );
-        css::document::EventObject aEvent( xSource, rEventName );
-        xModel->notifyEvent(aEvent );
+        uno::Reference<uno::XInterface> xSource(static_cast<uno::XWeak*>(xModel.get()));
+        NotifyDocumentEvent(rDocument, rEventName, xSource);
     }
 }
 
-void NotifyDocumentEvent( SdDrawDocument const & rDocument, const OUString& rEventName, const uno::Reference< uno::XInterface >& xSource )
+void NotifyDocumentEvent(SdDrawDocument const & rDocument, const OUString& rEventName, const uno::Reference<uno::XInterface>& xSource)
 {
-    rtl::Reference< SdXImpressDocument > xModel( SdXImpressDocument::GetModel( rDocument ) );
+    rtl::Reference<SdXImpressDocument> xModel(SdXImpressDocument::GetModel(rDocument));
 
-    if( xModel.is() )
+    if (xModel.is())
     {
-        css::document::EventObject aEvent( xSource, rEventName );
-        xModel->notifyEvent(aEvent );
+        css::document::EventObject aEvent(xSource, rEventName);
+        xModel->notifyEvent(aEvent);
     }
 }
 

@@ -247,7 +247,7 @@ void GtkInstance::EnsureInit()
 #ifdef GTK_TOOLKIT_NAME
     pSVData->maAppData.mxToolkitName = OUString(GTK_TOOLKIT_NAME);
 #else
-    pSVData->maAppData.mxToolkitName = u"gtk3"_ustr;
+    pSVData->maAppData.mxToolkitName = OUString("gtk3");
 #endif
 
     bNeedsInit = false;
@@ -19256,19 +19256,6 @@ gboolean signalTooltipQuery(GtkWidget* pWidget, gint /*x*/, gint /*y*/,
             return true;
         }
 #endif
-
-        // fallback to the mechanism which needs help installed
-        OUString sHelpId = ::get_help_id(pWidget);
-        Help* pHelp = !sHelpId.isEmpty() ? Application::GetHelp() : nullptr;
-        if (pHelp)
-        {
-            OUString sHelpText = pHelp->GetHelpText(sHelpId, static_cast<weld::Widget*>(nullptr));
-            if (!sHelpText.isEmpty())
-            {
-                gtk_tooltip_set_text(tooltip, OUStringToOString(sHelpText, RTL_TEXTENCODING_UTF8).getStr());
-                return true;
-            }
-        }
     }
 
     const char* pDesc = gtk_widget_get_tooltip_text(pWidget);

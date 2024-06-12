@@ -79,7 +79,7 @@ public:
     virtual void EndRuby(const SwTextNode& rNode, sal_Int32 nPos) override;
 
     /// Output URL start.
-    virtual bool StartURL( const OUString &rUrl, const OUString &rTarget ) override;
+    virtual bool StartURL(const OUString& rUrl, const OUString& rTarget, const OUString& rName = OUString()) override;
 
     /// Output URL end.
     virtual bool EndURL(bool) override;
@@ -459,6 +459,7 @@ public:
         , m_nStyleCountPos(0)
         , m_nFieldResults(0)
         , mbOnTOXEnding(false)
+        , mbFillStyleIsSet(false)
     {
     }
 
@@ -504,6 +505,7 @@ private:
     sal_uInt16 m_nFieldResults;
 
     bool mbOnTOXEnding;
+    bool mbFillStyleIsSet;
 
     /// Bookmarks of the current paragraph
     std::multimap<sal_Int32, OUString> m_aBookmarksOfParagraphStart;

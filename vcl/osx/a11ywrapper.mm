@@ -341,7 +341,7 @@ static std::ostream &operator<<(std::ostream &s, NSObject *obj) {
         Reference < XAccessibleRelationSet > rxAccessibleRelationSet = [ self accessibleContext ] -> getAccessibleRelationSet();
         AccessibleRelation const relationMemberOf = rxAccessibleRelationSet -> getRelationByType ( AccessibleRelationType::MEMBER_OF );
         if ( relationMemberOf.RelationType == AccessibleRelationType::MEMBER_OF && relationMemberOf.TargetSet.hasElements() ) {
-            for (Reference <XAccessible> rMateAccessible : relationMemberOf.TargetSet ) {
+            for (Reference <XAccessible> const & rMateAccessible : relationMemberOf.TargetSet ) {
                 if ( rMateAccessible.is() ) {
                     Reference< XAccessibleContext > rMateAccessibleContext( rMateAccessible -> getAccessibleContext() );
                     if ( rMateAccessibleContext.is() ) {
@@ -352,14 +352,15 @@ static std::ostream &operator<<(std::ostream &s, NSObject *obj) {
                 }
             }
         }
-        return children;
+        return [children autorelease];
     } else if ( [ self accessibleTable ] )
     {
         AquaA11yTableWrapper* pTable = [self isKindOfClass: [AquaA11yTableWrapper class]] ? static_cast<AquaA11yTableWrapper*>(self) : nil;
         return [ AquaA11yTableWrapper childrenAttributeForElement: pTable ];
     } else {
+        NSMutableArray * children = [ [ NSMutableArray alloc ] init ];
+
         try {
-            NSMutableArray * children = [ [ NSMutableArray alloc ] init ];
             Reference< XAccessibleContext > xContext( [ self accessibleContext ] );
 
             try {
@@ -397,12 +398,13 @@ static std::ostream &operator<<(std::ostream &s, NSObject *obj) {
                 }
             }
 
-            [ children autorelease ];
-            return NSAccessibilityUnignoredChildren( children );
+            return NSAccessibilityUnignoredChildren( [ children autorelease ] );
         } catch (const Exception &) {
             // TODO: Log
-            return nil;
         }
+
+        [ children autorelease ];
+        return [NSArray array];
     }
 }
 
@@ -749,7 +751,7 @@ static std::ostream &operator<<(std::ostream &s, NSObject *obj) {
     if ( isPopupMenuOpen ) {
         return NO;
     }
-    BOOL ignored = false;
+    bool ignored = false;
     try {
         sal_Int16 nRole = [ self accessibleContext ] -> getAccessibleRole();
         switch ( nRole ) {
@@ -1140,7 +1142,7 @@ static Reference < XAccessibleContext > hitTestRunner ( css::awt::Point point,
                 if ( relationSet.is() && relationSet -> containsRelation ( AccessibleRelationType::SUB_WINDOW_OF )) {
                     // we have a valid relation to the parent element
                     AccessibleRelation const relation = relationSet -> getRelationByType ( AccessibleRelationType::SUB_WINDOW_OF );
-                    for (Reference<XAccessible> rxAccessible : relation.TargetSet) {
+                    for (Reference<XAccessible> const & rxAccessible : relation.TargetSet) {
                         if ( rxAccessible.is() && rxAccessible -> getAccessibleContext().is() ) {
                             // hit test for children of parent
                             hitChild = hitTestRunner ( hitPoint, rxAccessible -> getAccessibleContext() );

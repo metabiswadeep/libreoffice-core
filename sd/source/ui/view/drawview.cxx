@@ -62,7 +62,6 @@ DrawView::DrawView(
     OutputDevice* pOutDev,
     DrawViewShell* pShell)
 :   ::sd::View(*pDocSh->GetDoc(), pOutDev, pShell)
-    ,mpDocShell(pDocSh)
     ,mpDrawViewShell(pShell)
     ,mnPOCHSmph(0)
 {
@@ -491,7 +490,7 @@ bool DrawView::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAtt
 
 void DrawView::CompleteRedraw(OutputDevice* pOutDev, const vcl::Region& rReg, sdr::contact::ViewObjectContactRedirector* pRedirector /*=0*/)
 {
-    SdDrawDocument* pDoc = mpDocShell->GetDoc();
+    SdDrawDocument* pDoc = GetDocSh()->GetDoc();
     if( pDoc && pDoc->GetDocumentType() == DocumentType::Impress)
     {
         rtl::Reference< sd::SlideShow > xSlideshow( SlideShow::GetSlideShow( pDoc ) );
@@ -542,10 +541,11 @@ void DrawView::DeleteMarked()
     sd::UndoManager* pUndoManager = mrDoc.GetUndoManager();
     DBG_ASSERT( pUndoManager, "sd::DrawView::DeleteMarked(), ui action without undo manager!?" );
 
+    const SdrMarkList& rMarkList = GetMarkedObjectList();
     if( pUndoManager )
     {
         OUString aUndo(SvxResId(STR_EditDelete));
-        aUndo = aUndo.replaceFirst("%1", GetMarkedObjectList().GetMarkDescription());
+        aUndo = aUndo.replaceFirst("%1", rMarkList.GetMarkDescription());
         ViewShellId nViewShellId = mpDrawViewShell ? mpDrawViewShell->GetViewShellBase().GetViewShellId() : ViewShellId(-1);
         pUndoManager->EnterListAction(aUndo, aUndo, 0, nViewShellId);
     }
@@ -553,7 +553,7 @@ void DrawView::DeleteMarked()
     SdPage* pPage = nullptr;
     bool bResetLayout = false;
 
-    const size_t nMarkCount = GetMarkedObjectList().GetMarkCount();
+    const size_t nMarkCount = rMarkList.GetMarkCount();
     if( nMarkCount )
     {
         SdrMarkList aList( GetMarkedObjectList() );

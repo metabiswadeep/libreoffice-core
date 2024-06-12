@@ -18,7 +18,9 @@
 #include <com/sun/star/uno/Exception.hpp>
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <com/sun/star/uno/genfunc.hxx>
+#include <cppu/unotype.hxx>
 #include <o3tl/runtimetooustring.hxx>
+#include <o3tl/temporary.hxx>
 #include <o3tl/unreachable.hxx>
 #include <rtl/strbuf.hxx>
 #include <typelib/typeclass.h>
@@ -34,8 +36,6 @@
 #include <wasm/callvirtualfunction.hxx>
 
 #include "abi.hxx"
-
-using namespace ::com::sun::star::uno;
 
 namespace
 {
@@ -324,7 +324,21 @@ void unoInterfaceProxyDispatch(uno_Interface* pUnoI, const typelib_TypeDescripti
     {
         case typelib_TypeClass_INTERFACE_ATTRIBUTE:
         {
-            std::abort();
+            auto const atd
+                = reinterpret_cast<typelib_InterfaceAttributeTypeDescription const*>(pMemberDescr);
+            VtableSlot slot(getVtableSlot(atd));
+            if (pReturn == nullptr)
+            {
+                slot.index += 1;
+                call(pThis, slot, cppu::UnoType<void>::get().getTypeLibType(), 1,
+                     &o3tl::temporary(
+                         typelib_MethodParameter{ nullptr, atd->pAttributeTypeRef, true, false }),
+                     pReturn, pArgs, ppException);
+            }
+            else
+            {
+                call(pThis, slot, atd->pAttributeTypeRef, 0, nullptr, pReturn, pArgs, ppException);
+            }
             break;
         }
         case typelib_TypeClass_INTERFACE_METHOD:
@@ -345,7 +359,8 @@ void unoInterfaceProxyDispatch(uno_Interface* pUnoI, const typelib_TypeDescripti
                 case 0: // queryInterface() opt
                 {
                     typelib_TypeDescription* pTD = 0;
-                    TYPELIB_DANGER_GET(&pTD, reinterpret_cast<Type*>(pArgs[0])->getTypeLibType());
+                    TYPELIB_DANGER_GET(
+                        &pTD, reinterpret_cast<css::uno::Type*>(pArgs[0])->getTypeLibType());
                     if (pTD)
                     {
                         uno_Interface* pInterface = 0;
@@ -383,7 +398,7 @@ void unoInterfaceProxyDispatch(uno_Interface* pUnoI, const typelib_TypeDescripti
                 "illegal member type description!",
                 ::com::sun::star::uno::Reference<::com::sun::star::uno::XInterface>());
 
-            Type const& rExcType = cppu::UnoType<decltype(aExc)>::get();
+            css::uno::Type const& rExcType = cppu::UnoType<decltype(aExc)>::get();
             // binary identical null reference
             ::uno_type_any_construct(*ppException, &aExc, rExcType.getTypeLibType(), 0);
         }

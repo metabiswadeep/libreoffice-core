@@ -81,7 +81,7 @@ void ScDrawShell::GetHLinkState( SfxItemSet& rSet )             //  Hyperlink
             uno::Reference< beans::XPropertySet > xPropSet( xControlModel, uno::UNO_QUERY );
             uno::Reference< beans::XPropertySetInfo > xInfo = xPropSet->getPropertySetInfo();
 
-            OUString sPropButtonType( "ButtonType" );
+            OUString sPropButtonType( u"ButtonType"_ustr );
 
             if(xInfo->hasPropertyByName( sPropButtonType ))
             {
@@ -91,7 +91,7 @@ void ScDrawShell::GetHLinkState( SfxItemSet& rSet )             //  Hyperlink
                 {
                     OUString sTmp;
                     // Label
-                    OUString sPropLabel( "Label" );
+                    OUString sPropLabel( u"Label"_ustr );
                     if(xInfo->hasPropertyByName( sPropLabel ))
                     {
                         aAny = xPropSet->getPropertyValue( sPropLabel );
@@ -101,7 +101,7 @@ void ScDrawShell::GetHLinkState( SfxItemSet& rSet )             //  Hyperlink
                         }
                     }
                     // URL
-                    OUString sPropTargetURL( "TargetURL" );
+                    OUString sPropTargetURL( u"TargetURL"_ustr );
                     if(xInfo->hasPropertyByName( sPropTargetURL ))
                     {
                         aAny = xPropSet->getPropertyValue( sPropTargetURL );
@@ -111,7 +111,7 @@ void ScDrawShell::GetHLinkState( SfxItemSet& rSet )             //  Hyperlink
                         }
                     }
                     // Target
-                    OUString sPropTargetFrame( "TargetFrame" );
+                    OUString sPropTargetFrame( u"TargetFrame"_ustr );
                     if(xInfo->hasPropertyByName( sPropTargetFrame ))
                     {
                         aAny = xPropSet->getPropertyValue( sPropTargetFrame );
@@ -168,15 +168,15 @@ void ScDrawShell::ExecuteHLink( const SfxRequest& rReq )
                                 uno::Reference< beans::XPropertySet > xPropSet( xControlModel, uno::UNO_QUERY );
                                 uno::Reference< beans::XPropertySetInfo > xInfo = xPropSet->getPropertySetInfo();
 
-                                OUString sPropTargetURL( "TargetURL" );
+                                OUString sPropTargetURL( u"TargetURL"_ustr );
 
                                 // Is it possible to set a URL in the object?
                                 if (xInfo->hasPropertyByName( sPropTargetURL ))
                                 {
 
-                                    OUString sPropButtonType( "ButtonType");
-                                    OUString sPropTargetFrame( "TargetFrame" );
-                                    OUString sPropLabel( "Label" );
+                                    OUString sPropButtonType( u"ButtonType"_ustr);
+                                    OUString sPropTargetFrame( u"TargetFrame"_ustr );
+                                    OUString sPropLabel( u"Label"_ustr );
 
                                     if ( xInfo->hasPropertyByName( sPropLabel ) )
                                     {
@@ -506,10 +506,11 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
 
         case SID_RENAME_OBJECT:
             {
-                if(1 == pView->GetMarkedObjectList().GetMarkCount())
+                const SdrMarkList& rMarkList = pView->GetMarkedObjectList();
+                if(1 == rMarkList.GetMarkCount())
                 {
                     // #i68101#
-                    SdrObject* pSelected = pView->GetMarkedObjectByIndex(0);
+                    SdrObject* pSelected = rMarkList.GetMark(0)->GetMarkedSdrObj();
                     assert(pSelected && "ScDrawShell::ExecDrawFunc: nMarkCount, but no object (!)");
 
                     if(SC_LAYER_INTERN != pSelected->GetLayer())
@@ -580,9 +581,10 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
         // #i68101#
         case SID_TITLE_DESCRIPTION_OBJECT:
             {
-                if(1 == pView->GetMarkedObjectList().GetMarkCount())
+                const SdrMarkList& rMarkList = pView->GetMarkedObjectList();
+                if(1 == rMarkList.GetMarkCount())
                 {
-                    SdrObject* pSelected = pView->GetMarkedObjectByIndex(0);
+                    SdrObject* pSelected = rMarkList.GetMark(0)->GetMarkedSdrObj();
                     assert(pSelected && "ScDrawShell::ExecDrawFunc: nMarkCount, but no object (!)");
 
                     if(SC_LAYER_INTERN != pSelected->GetLayer())
@@ -709,7 +711,7 @@ void ScDrawShell::ExecFormatPaintbrush( const SfxRequest& rReq )
             bLock = pArgs->Get(SID_FORMATPAINTBRUSH).GetValue();
 
         ScDrawView* pDrawView = rViewData.GetScDrawView();
-        if ( pDrawView && pDrawView->AreObjectsMarked() )
+        if ( pDrawView && pDrawView->GetMarkedObjectList().GetMarkCount() != 0 )
         {
             std::unique_ptr<SfxItemSet> pItemSet(new SfxItemSet( pDrawView->GetAttrFromMarked(true/*bOnlyHardAttr*/) ));
             pView->SetDrawBrushSet( std::move(pItemSet), bLock );
@@ -720,7 +722,7 @@ void ScDrawShell::ExecFormatPaintbrush( const SfxRequest& rReq )
 void ScDrawShell::StateFormatPaintbrush( SfxItemSet& rSet )
 {
     ScDrawView* pDrawView = rViewData.GetScDrawView();
-    bool bSelection = pDrawView && pDrawView->AreObjectsMarked();
+    bool bSelection = pDrawView && pDrawView->GetMarkedObjectList().GetMarkCount() != 0;
     bool bHasPaintBrush = rViewData.GetView()->HasPaintBrush();
 
     if ( !bHasPaintBrush && !bSelection )

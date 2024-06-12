@@ -97,6 +97,7 @@
 #include "rtfexport.hxx"
 #include <IDocumentDeviceAccess.hxx>
 #include <sfx2/printer.hxx>
+#include <fmtftntx.hxx>
 
 using namespace ::com::sun::star;
 using namespace sw::util;
@@ -547,7 +548,8 @@ void RtfAttributeOutput::StartRuby(const SwTextNode& rNode, sal_Int32 /*nPos*/,
 
 void RtfAttributeOutput::EndRuby(const SwTextNode& /*rNode*/, sal_Int32 /*nPos*/) {}
 
-bool RtfAttributeOutput::StartURL(const OUString& rUrl, const OUString& rTarget)
+bool RtfAttributeOutput::StartURL(const OUString& rUrl, const OUString& rTarget,
+                                  const OUString& /*rName*/)
 {
     m_aURLs.push(rUrl);
     // Ignore hyperlink without a URL.
@@ -1366,6 +1368,23 @@ void RtfAttributeOutput::SectionBreak(sal_uInt8 nC, bool /*bBreakAfter*/,
                 m_rExport.SectionProperties(*pSectionInfo);
             break;
     }
+
+    // Endnotes included in the section:
+    if (!pSectionInfo)
+    {
+        return;
+    }
+    const SwSectionFormat* pSectionFormat = pSectionInfo->pSectionFormat;
+    if (!pSectionFormat || pSectionFormat == reinterpret_cast<SwSectionFormat*>(sal_IntPtr(-1)))
+    {
+        // MSWordExportBase::WriteText() can set the section format to -1, ignore.
+        return;
+    }
+    if (!pSectionFormat->GetEndAtTextEnd().IsAtEnd())
+    {
+        return;
+    }
+    m_aSectionBreaks.append(OOO_STRING_SVTOOLS_RTF_ENDNHERE);
 }
 
 void RtfAttributeOutput::StartSection()
@@ -3738,6 +3757,7 @@ void RtfAttributeOutput::FormatFillStyle(const XFillStyleItem& rFillStyle)
 
 void RtfAttributeOutput::FormatFillGradient(const XFillGradientItem& rFillGradient)
 {
+    assert(m_oFillStyle && "ITEM: FormatFillStyle *has* to be called before FormatFillGradient(!)");
     if (*m_oFillStyle != drawing::FillStyle_GRADIENT)
         return;
 

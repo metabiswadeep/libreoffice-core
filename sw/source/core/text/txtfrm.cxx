@@ -2159,17 +2159,17 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
             pPage->UpdateVirtPageNumInfo(rVirtPageNumHint, this);
         return;
     }
-    else if (auto const pHt = dynamic_cast<sw::MoveText const*>(&rHint))
+    else if (rHint.GetId() == SfxHintId::SwMoveText)
     {
-        pMoveText = pHt;
+        pMoveText = static_cast<sw::MoveText const*>(&rHint);
     }
-    else if (auto const pHynt = dynamic_cast<sw::RedlineDelText const*>(&rHint))
+    else if (rHint.GetId() == SfxHintId::SwRedlineDelText)
     {
-        pRedlineDelText = pHynt;
+        pRedlineDelText = static_cast<sw::RedlineDelText const*>(&rHint);
     }
-    else if (auto const pHnt = dynamic_cast<sw::RedlineUnDelText const*>(&rHint))
+    else if (rHint.GetId() == SfxHintId::SwRedlineUnDelText)
     {
-        pRedlineUnDelText = pHnt;
+        pRedlineUnDelText = static_cast<sw::RedlineUnDelText const*>(&rHint);
     }
     else
     {
@@ -3878,24 +3878,24 @@ tools::Long SwTextFrame::GetLineSpace( const bool _bNoPropLineSpace ) const
     return nRet;
 }
 
-sal_uInt16 SwTextFrame::FirstLineHeight() const
+SwTwips SwTextFrame::FirstLineHeight() const
 {
     if ( !HasPara() )
     {
         if( IsEmpty() && isFrameAreaDefinitionValid() )
-            return IsVertical() ? o3tl::narrowing<sal_uInt16>(getFramePrintArea().Width()) : o3tl::narrowing<sal_uInt16>(getFramePrintArea().Height());
-        return USHRT_MAX;
+            return IsVertical() ? getFramePrintArea().Width() : getFramePrintArea().Height();
+        return std::numeric_limits<SwTwips>::max();
     }
     const SwParaPortion *pPara = GetPara();
     if ( !pPara )
-        return USHRT_MAX;
+        return std::numeric_limits<SwTwips>::max();
 
     // tdf#146500 Lines with only fly overlap cannot be "moved", so the idea
     // here is to continue until there's some text.
     // FIXME ideally we want to count a fly to the line in which it is anchored
     // - it may even be anchored in some other paragraph! SwFlyPortion doesn't
     // have a pointer sadly so no way to find out.
-    sal_uInt16 nHeight(0);
+    SwTwips nHeight(0);
     for (SwLineLayout const* pLine = pPara; pLine; pLine = pLine->GetNext())
     {
         nHeight += pLine->Height();

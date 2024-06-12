@@ -2059,6 +2059,29 @@ namespace {
 
         return bRet;
     }
+
+// Similar to SwObjPosOscillationControl in sw/source/core/layout/anchoreddrawobject.cxx
+class PosSizeOscillationControl
+{
+public:
+    bool OscillationDetected(const SwFrameAreaDefinition& rFrameArea);
+
+private:
+    std::vector<std::pair<SwRect, SwRect>> maFrameDatas;
+};
+
+bool PosSizeOscillationControl::OscillationDetected(const SwFrameAreaDefinition& rFrameArea)
+{
+    if (maFrameDatas.size() == 20) // stack is full -> oscillation
+        return true;
+
+    for (const auto& [area, printArea] : maFrameDatas)
+        if (rFrameArea.getFrameArea() == area && rFrameArea.getFramePrintArea() == printArea)
+            return true;
+
+    maFrameDatas.emplace_back(rFrameArea.getFrameArea(), rFrameArea.getFramePrintArea());
+    return false;
+}
 }
 
 // extern because static can't be friend
@@ -2256,6 +2279,7 @@ void SwTabFrame::MakeAll(vcl::RenderContext* pRenderContext)
 
     int nUnSplitted = 5; // Just another loop control :-(
     int nThrowAwayValidLayoutLimit = 5; // And another one :-(
+    PosSizeOscillationControl posSizeOscillationControl; // And yet another one.
     SwRectFnSet aRectFnSet(this);
     while ( !isFrameAreaPositionValid() || !isFrameAreaSizeValid() || !isFramePrintAreaValid() )
     {
@@ -2946,7 +2970,9 @@ void SwTabFrame::MakeAll(vcl::RenderContext* pRenderContext)
                     // split operation as good as possible. Therefore we
                     // do some more calculations. Note: Restricting this
                     // to nDeadLine may not be enough.
-                    if ( bSplitError && bTryToSplit ) // no restart if we did not try to split: i72847, i79426
+                    // tdf#161508 hack: treat oscillation likewise
+                    if ((bSplitError && bTryToSplit) // no restart if we did not try to split: i72847, i79426
+                        || posSizeOscillationControl.OscillationDetected(*this))
                     {
                         lcl_RecalcRow(*static_cast<SwRowFrame*>(Lower()), LONG_MAX);
                         setFrameAreaPositionValid(false);
@@ -6459,7 +6485,7 @@ static SwTwips lcl_CalcHeightOfFirstContentLine( const SwRowFrame& rSourceLine )
         const SwFrame *pTmp = pCurrSourceCell->Lower();
         if ( pTmp )
         {
-            SwTwips nTmpHeight = USHRT_MAX;
+            SwTwips nTmpHeight = std::numeric_limits<SwTwips>::max();
             // #i32456# Consider lower row frames
             if ( pTmp->IsRowFrame() )
             {
@@ -6487,7 +6513,7 @@ static SwTwips lcl_CalcHeightOfFirstContentLine( const SwRowFrame& rSourceLine )
                 nTmpHeight = pTextFrame->FirstLineHeight();
             }
 
-            if ( USHRT_MAX != nTmpHeight )
+            if (std::numeric_limits<SwTwips>::max() != nTmpHeight)
             {
                 const SwCellFrame* pPrevCell = pCurrSourceCell->GetPreviousCell();
                 if ( pPrevCell )
@@ -6565,7 +6591,7 @@ static SwTwips lcl_CalcHeightOfFirstContentLine( const SwRowFrame& rSourceLine )
             else
             {
                 // maximum
-                if ( nTmpHeight > nHeight && USHRT_MAX != nTmpHeight )
+                if (nTmpHeight > nHeight && std::numeric_limits<SwTwips>::max() != nTmpHeight)
                     nHeight = nTmpHeight;
             }
         }

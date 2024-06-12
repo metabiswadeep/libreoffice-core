@@ -642,10 +642,11 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
         else
         {
             // is something selected?
-            if (mpDrawView->AreObjectsMarked() &&
-                mpDrawView->GetMarkedObjectList().GetMarkCount() == 1 )
+            const SdrMarkList& rMarkList(mpDrawView->GetMarkedObjectList());
+            if (rMarkList.GetMarkCount() != 0 &&
+                rMarkList.GetMarkCount() == 1 )
             {
-                pObj = mpDrawView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
+                pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
                 if( HasCurrentFunction(SID_BEZIER_EDIT) && (dynamic_cast< SdrPathObj * >( pObj ) != nullptr ) )
                 {
                     aPopupId = "bezier";
@@ -757,6 +758,9 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
                                 case SdrObjKind::Table:
                                     aPopupId = "table";
                                     break;
+                                case SdrObjKind::Annotation:
+                                    aPopupId = "annotation";
+                                    break;
                                 default: ;
                             }
                         }
@@ -781,8 +785,8 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
             }
 
             // multiple selection
-            else if (mpDrawView->AreObjectsMarked() &&
-                mpDrawView->GetMarkedObjectList().GetMarkCount() > 1 )
+            else if (rMarkList.GetMarkCount() != 0 &&
+                rMarkList.GetMarkCount() > 1 )
             {
                 aPopupId = "multiselect";
             }
@@ -808,11 +812,12 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
                 Point aMenuPos(GetActiveWindow()->GetSizePixel().Width()/2
                         ,GetActiveWindow()->GetSizePixel().Height()/2);
 
+                const SdrMarkList& rMarkList(mpDrawView->GetMarkedObjectList());
                 //middle of the bounding rect if something is marked
-                if( mpDrawView->AreObjectsMarked() && mpDrawView->GetMarkedObjectList().GetMarkCount() >= 1 )
+                if( rMarkList.GetMarkCount() != 0 && rMarkList.GetMarkCount() >= 1 )
                 {
                     ::tools::Rectangle aMarkRect;
-                    mpDrawView->GetMarkedObjectList().TakeBoundRect(nullptr,aMarkRect);
+                    rMarkList.TakeBoundRect(nullptr,aMarkRect);
                     aMenuPos = GetActiveWindow()->LogicToPixel( aMarkRect.Center() );
 
                     //move the point into the visible window area

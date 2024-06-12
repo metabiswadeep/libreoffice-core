@@ -137,6 +137,17 @@ DrawViewShell::DrawViewShell( ViewShellBase& rViewShellBase, vcl::Window* pParen
 
     if (comphelper::LibreOfficeKit::isActive())
     {
+        // get the full page size in pixels
+        mpContentWindow->EnableMapMode();
+        Size aSize(mpContentWindow->LogicToPixel(GetView()->GetSdrPageView()->GetPage()->GetSize()));
+        // Disable map mode, so that it's possible to send mouse event
+        // coordinates in logic units
+        mpContentWindow->EnableMapMode(false);
+
+        // arrange UI elements again with new view size
+        GetParentWindow()->SetSizePixel(aSize);
+        Resize();
+
         SdXImpressDocument* pModel = comphelper::getFromUnoTunnel<SdXImpressDocument>(rViewShellBase.GetCurrentDocument());
         SfxLokHelper::notifyViewRenderState(&rViewShellBase, pModel);
     }
@@ -650,7 +661,8 @@ void DrawViewShell::GetStatusBarState(SfxItemSet& rSet)
         }
         else
         {
-            if ( mpDrawView->AreObjectsMarked() )
+            const SdrMarkList& rMarkList = mpDrawView->GetMarkedObjectList();
+            if ( rMarkList.GetMarkCount() != 0 )
             {
                 ::tools::Rectangle aRect = mpDrawView->GetAllMarkedRect();
                 pPageView->LogicToPagePos(aRect);
@@ -806,9 +818,10 @@ OUString const & DrawViewShell::GetSidebarContextName() const
                 eViewType = svx::sidebar::SelectionAnalyzer::ViewType::Standard;
             break;
     }
+    const SdrMarkList& rMarkList = mpDrawView->GetMarkedObjectList();
     return EnumContext::GetContextName(
         svx::sidebar::SelectionAnalyzer::GetContextForSelection_SD(
-            mpDrawView->GetMarkedObjectList(),
+            rMarkList,
             eViewType));
 }
 

@@ -565,7 +565,7 @@ bool ScDrawStringsVars::SetText( const ScRefCellValue& rCell )
 
 void ScDrawStringsVars::SetHashText()
 {
-    SetAutoText("###");
+    SetAutoText(u"###"_ustr);
 }
 
 void ScDrawStringsVars::RepeatToFill( tools::Long nColWidth )
@@ -1486,7 +1486,7 @@ void ScOutputData::LayoutStrings(bool bPixelToLogic)
         if (!bReopenTag)
         {
             sal_Int32 nId = pPDF->EnsureStructureElement(nullptr);
-            pPDF->InitStructureElement(nId, vcl::PDFWriter::Table, "Table");
+            pPDF->InitStructureElement(nId, vcl::PDFWriter::Table, u"Table"_ustr);
             pPDF->BeginStructureElement(nId);
             pPDF->GetScPDFState()->m_TableId = nId;
         }
@@ -1565,7 +1565,7 @@ void ScOutputData::LayoutStrings(bool bPixelToLogic)
                 if (!bReopenTag)
                 {
                     sal_Int32 nId = pPDF->EnsureStructureElement(nullptr);
-                    pPDF->InitStructureElement(nId, vcl::PDFWriter::TableRow, "TR");
+                    pPDF->InitStructureElement(nId, vcl::PDFWriter::TableRow, u"TR"_ustr);
                     pPDF->BeginStructureElement(nId);
                     pPDF->GetScPDFState()->m_TableRowMap.emplace(nY, nId);
                 }
@@ -1577,7 +1577,7 @@ void ScOutputData::LayoutStrings(bool bPixelToLogic)
             for (SCCOL nX=nLoopStartX; nX<=nX2; nX++)
             {
                 if (bTaggedPDF)
-                    pPDF->WrapBeginStructureElement(vcl::PDFWriter::TableData, "TD");
+                    pPDF->WrapBeginStructureElement(vcl::PDFWriter::TableData, u"TD"_ustr);
 
                 bool bMergeEmpty = false;
                 const ScCellInfo* pInfo = &pThisRowInfo->cellInfo(nX);
@@ -2123,7 +2123,7 @@ void ScOutputData::LayoutStrings(bool bPixelToLogic)
                         if (!aString.isEmpty())
                         {
                             if (bTaggedPDF)
-                                pPDF->WrapBeginStructureElement(vcl::PDFWriter::Paragraph, "P");
+                                pPDF->WrapBeginStructureElement(vcl::PDFWriter::Paragraph, u"P"_ustr);
 
                             // If the string is clipped, make it shorter for
                             // better performance since drawing by HarfBuzz is
@@ -3117,7 +3117,7 @@ void ScOutputData::DrawEditStandard(DrawEditParam& rParam)
 
         if ( rParam.mbCellIsValue && ( aAreaParam.mbLeftClip || aAreaParam.mbRightClip ) )
         {
-            SetEngineTextAndGetWidth( rParam, "###", nNeededPixel, ( nLeftM + nRightM ) );
+            SetEngineTextAndGetWidth( rParam, u"###"_ustr, nNeededPixel, ( nLeftM + nRightM ) );
             tools::Long nLayoutSign = bLayoutRTL ? -1 : 1;
             ScCellInfo* pClipMarkCell = &rParam.mpThisRowInfo->cellInfo(rParam.mnX);
             SetClipMarks( aAreaParam, pClipMarkCell, eOutHorJust, nLayoutSign );
@@ -3528,7 +3528,7 @@ void ScOutputData::DrawEditBottomTop(DrawEditParam& rParam)
         }
         if ( rParam.mbCellIsValue && ( aAreaParam.mbLeftClip || aAreaParam.mbRightClip ) )
         {
-            nEngineWidth = SetEngineTextAndGetWidth( rParam, "###", nNeededPixel, ( nLeftM + nRightM ) );
+            nEngineWidth = SetEngineTextAndGetWidth( rParam, u"###"_ustr, nNeededPixel, ( nLeftM + nRightM ) );
 
             //  No clip marks if "###" doesn't fit (same as in DrawStrings)
         }
@@ -3772,7 +3772,7 @@ void ScOutputData::DrawEditTopBottom(DrawEditParam& rParam)
         }
         if ( rParam.mbCellIsValue && ( aAreaParam.mbLeftClip || aAreaParam.mbRightClip ) )
         {
-            nEngineWidth = SetEngineTextAndGetWidth( rParam, "###", nNeededPixel, ( nLeftM + nRightM ) );
+            nEngineWidth = SetEngineTextAndGetWidth( rParam, u"###"_ustr, nNeededPixel, ( nLeftM + nRightM ) );
 
             //  No clip marks if "###" doesn't fit (same as in DrawStrings)
         }
@@ -3993,7 +3993,7 @@ void ScOutputData::DrawEditStacked(DrawEditParam& rParam)
 
         if ( rParam.mbCellIsValue && ( aAreaParam.mbLeftClip || aAreaParam.mbRightClip ) )
         {
-            nEngineWidth = SetEngineTextAndGetWidth( rParam, "###", nNeededPixel, ( nLeftM + nRightM ) );
+            nEngineWidth = SetEngineTextAndGetWidth( rParam, u"###"_ustr, nNeededPixel, ( nLeftM + nRightM ) );
             tools::Long nLayoutSign = bLayoutRTL ? -1 : 1;
             ScCellInfo* pClipMarkCell = &rParam.mpThisRowInfo->cellInfo(rParam.mnX);
             SetClipMarks( aAreaParam, pClipMarkCell, eOutHorJust, nLayoutSign );
@@ -4293,7 +4293,7 @@ void ScOutputData::DrawEditAsianVertical(DrawEditParam& rParam)
     }
     if ( rParam.mbCellIsValue && ( aAreaParam.mbLeftClip || aAreaParam.mbRightClip ) )
     {
-        nEngineWidth = SetEngineTextAndGetWidth( rParam, "###", nNeededPixel, ( nLeftM + nRightM ) );
+        nEngineWidth = SetEngineTextAndGetWidth( rParam, u"###"_ustr, nNeededPixel, ( nLeftM + nRightM ) );
         tools::Long nLayoutSign = bLayoutRTL ? -1 : 1;
         ScCellInfo* pClipMarkCell = &rParam.mpThisRowInfo->cellInfo(rParam.mnX);
         SetClipMarks( aAreaParam, pClipMarkCell, eOutHorJust, nLayoutSign );

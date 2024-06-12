@@ -125,13 +125,14 @@ static void lcl_InsertGraphic( const Graphic& rGraphic,
         }
     }
     ScDrawView* pDrawView = rViewSh.GetScDrawView();
+    const SdrMarkList& rMarkList = pDrawView->GetMarkedObjectList();
 
     // #i123922# check if an existing object is selected; if yes, evtl. replace
     // the graphic for a SdrGraphObj (including link state updates) or adapt the fill
     // style for other objects
-    if(pDrawView && 1 == pDrawView->GetMarkedObjectList().GetMarkCount())
+    if(pDrawView && 1 == rMarkList.GetMarkCount())
     {
-        SdrObject* pPickObj = pDrawView->GetMarkedObjectByIndex(0);
+        SdrObject* pPickObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
 
         if(pPickObj)
         {
@@ -255,7 +256,7 @@ static void lcl_InsertMedia( const OUString& rMediaURL, bool bApi,
         *rData.GetDocument().GetDrawLayer(),
         tools::Rectangle(aInsertPos, aSize));
 
-    pObj->setURL( realURL, ""/*TODO?*/ );
+    pObj->setURL( realURL, u""_ustr/*TODO?*/ );
     pView->InsertObjectAtView( pObj.get(), *pPV, bApi ? SdrInsertFlags::DONTMARK : SdrInsertFlags::NONE );
 }
 #endif
@@ -432,7 +433,7 @@ FuInsertMedia::FuInsertMedia( ScTabViewShell&   rViewSh,
                 avmedia::MediaWindow::dispatchInsertAVMedia(xDispatchProvider, aSize, aURL, bLink);
             }));
 
-        const bool bIsMediaURL = ::avmedia::MediaWindow::isMediaURL(aURL, ""/*TODO?*/, true, xPlayerListener);
+        const bool bIsMediaURL = ::avmedia::MediaWindow::isMediaURL(aURL, u""_ustr/*TODO?*/, true, xPlayerListener);
 
         if( pWin )
             pWin->LeaveWait();

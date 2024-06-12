@@ -35,7 +35,7 @@ ScSolverDlg::ScSolverDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* pP
                           ScDocument* pDocument,
                           const ScAddress& aCursorPos )
 
-    : ScAnyRefDlgController(pB, pCW, pParent, "modules/scalc/ui/goalseekdlg.ui", "GoalSeekDialog")
+    : ScAnyRefDlgController(pB, pCW, pParent, u"modules/scalc/ui/goalseekdlg.ui"_ustr, u"GoalSeekDialog"_ustr)
     , theFormulaCell(aCursorPos)
     , theVariableCell(aCursorPos)
     , pDoc(pDocument)
@@ -46,15 +46,15 @@ ScSolverDlg::ScSolverDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* pP
     , errMsgNoFormula(ScResId(STR_NOFORMULA))
     , errMsgInvalidVal(ScResId(STR_INVALIDVAL))
     , m_pEdActive(nullptr)
-    , m_xFtFormulaCell(m_xBuilder->weld_label("formulatext"))
-    , m_xEdFormulaCell(new formula::RefEdit(m_xBuilder->weld_entry("formulaedit")))
-    , m_xRBFormulaCell(new formula::RefButton(m_xBuilder->weld_button("formulabutton")))
-    , m_xEdTargetVal(m_xBuilder->weld_entry("target"))
-    , m_xFtVariableCell(m_xBuilder->weld_label("vartext"))
-    , m_xEdVariableCell(new formula::RefEdit(m_xBuilder->weld_entry("varedit")))
-    , m_xRBVariableCell(new formula::RefButton(m_xBuilder->weld_button("varbutton")))
-    , m_xBtnOk(m_xBuilder->weld_button("ok"))
-    , m_xBtnCancel(m_xBuilder->weld_button("cancel"))
+    , m_xFtFormulaCell(m_xBuilder->weld_label(u"formulatext"_ustr))
+    , m_xEdFormulaCell(new formula::RefEdit(m_xBuilder->weld_entry(u"formulaedit"_ustr)))
+    , m_xRBFormulaCell(new formula::RefButton(m_xBuilder->weld_button(u"formulabutton"_ustr)))
+    , m_xEdTargetVal(m_xBuilder->weld_entry(u"target"_ustr))
+    , m_xFtVariableCell(m_xBuilder->weld_label(u"vartext"_ustr))
+    , m_xEdVariableCell(new formula::RefEdit(m_xBuilder->weld_entry(u"varedit"_ustr)))
+    , m_xRBVariableCell(new formula::RefButton(m_xBuilder->weld_button(u"varbutton"_ustr)))
+    , m_xBtnOk(m_xBuilder->weld_button(u"ok"_ustr))
+    , m_xBtnCancel(m_xBuilder->weld_button(u"cancel"_ustr))
 {
     m_xEdFormulaCell->SetReferences(this, m_xFtFormulaCell.get());
     m_xRBFormulaCell->SetReferences(this, m_xEdFormulaCell.get());
@@ -95,7 +95,21 @@ void ScSolverDlg::Init()
 
     OUString aStr(theFormulaCell.Format(ScRefFlags::ADDR_ABS, nullptr, pDoc->GetAddressConvention()));
 
-    m_xEdFormulaCell->SetText( aStr );
+    // If Goal Seek settings are stored in the document, restore them
+    ScGoalSeekSettings aSettings = pDoc->GetGoalSeekSettings();
+    if (aSettings.bDefined)
+    {
+        OUString sFormulaString(aSettings.aFormulaCell.Format(ScRefFlags::ADDR_ABS, nullptr, pDoc->GetAddressConvention()));
+        OUString sVariableString(aSettings.aVariableCell.Format(ScRefFlags::ADDR_ABS, nullptr, pDoc->GetAddressConvention()));
+        m_xEdFormulaCell->SetText(sFormulaString);
+        m_xEdVariableCell->SetText(sVariableString);
+        m_xEdTargetVal->set_text(aSettings.sTargetValue);
+    }
+    else
+    {
+        m_xEdFormulaCell->SetText( aStr );
+    }
+
     m_xEdFormulaCell->GrabFocus();
     m_pEdActive = m_xEdFormulaCell.get();
 }
@@ -200,6 +214,14 @@ IMPL_LINK(ScSolverDlg, BtnHdl, weld::Button&, rBtn, void)
         const formula::FormulaGrammar::AddressConvention eConv = pDoc->GetAddressConvention();
         ScRefFlags  nRes1 = theFormulaCell .Parse( m_xEdFormulaCell->GetText(),  *pDoc, eConv );
         ScRefFlags  nRes2 = theVariableCell.Parse( m_xEdVariableCell->GetText(), *pDoc, eConv );
+
+        // Remember Goal Seek settings for the next time the dialog opens
+        ScGoalSeekSettings aSettings;
+        aSettings.bDefined = true;
+        aSettings.aFormulaCell = theFormulaCell;
+        aSettings.aVariableCell = theVariableCell;
+        aSettings.sTargetValue = theTargetValStr;
+        pDoc->SetGoalSeekSettings(aSettings);
 
         if ( (nRes1 & ScRefFlags::VALID) == ScRefFlags::VALID )
         {

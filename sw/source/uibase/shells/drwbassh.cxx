@@ -118,7 +118,7 @@ void SwDrawBaseShell::Execute(SfxRequest& rReq)
     {
         case FN_DRAW_WRAP_DLG:
         {
-            if(pSdrView->AreObjectsMarked())
+            if(pSdrView->GetMarkedObjectList().GetMarkCount() != 0)
             {
                 if(!pArgs)
                 {
@@ -174,7 +174,7 @@ void SwDrawBaseShell::Execute(SfxRequest& rReq)
 
         case SID_ATTR_TRANSFORM:
         {
-            if(pSdrView->AreObjectsMarked())
+            if(pSdrView->GetMarkedObjectList().GetMarkCount() != 0)
             {
                 if(!pArgs)
                 {
@@ -249,7 +249,7 @@ void SwDrawBaseShell::Execute(SfxRequest& rReq)
                         if (rIDSA.get(DocumentSettingId::DO_NOT_MIRROR_RTL_DRAW_OBJS))
                         {
                             SfxGrabBagItem aItem(RES_CHRATR_GRABBAG);
-                            aItem.GetGrabBag()["DoNotMirrorRtlDrawObjs"] <<= true;
+                            aItem.GetGrabBag()[u"DoNotMirrorRtlDrawObjs"_ustr] <<= true;
                             aSet.Put(aItem);
                         }
 
@@ -607,7 +607,7 @@ void SwDrawBaseShell::Execute(SfxRequest& rReq)
             if(1 == pSdrView->GetMarkedObjectList().GetMarkCount())
             {
                 // #i68101#
-                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
                 assert(pSelected && "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aOrigName(pSelected->GetName());
 
@@ -651,7 +651,7 @@ void SwDrawBaseShell::Execute(SfxRequest& rReq)
 
             if(1 == pSdrView->GetMarkedObjectList().GetMarkCount())
             {
-                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
                 assert(pSelected && "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aTitle(pSelected->GetTitle());
                 OUString aDescription(pSelected->GetDescription());

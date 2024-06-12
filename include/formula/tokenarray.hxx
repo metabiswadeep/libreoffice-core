@@ -487,6 +487,7 @@ public:
     FormulaToken* AddExternal( const OUString& rStr, OpCode eOp = ocExternal );
     FormulaToken* AddBad( const OUString& rStr );          /// ocBad with OUString
     FormulaToken* AddStringXML( const OUString& rStr );    /// ocStringXML with OUString, temporary during import
+    FormulaToken* AddStringName( const OUString& rStr );   /// ocStringName with OUString - Lambda functions
 
     virtual FormulaToken* MergeArray( );
 
@@ -639,6 +640,7 @@ public:
     FormulaToken* Next();
     FormulaToken* NextNoSpaces();
     FormulaToken* GetNextName();
+    FormulaToken* GetNextStringName();
     FormulaToken* GetNextReference();
     FormulaToken* GetNextReferenceRPN();
     FormulaToken* GetNextReferenceOrName();

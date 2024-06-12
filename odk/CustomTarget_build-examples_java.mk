@@ -26,7 +26,7 @@ my_example_dirs_java = \
     DevelopersGuide/GUI \
     DevelopersGuide/OfficeBean \
     DevelopersGuide/OfficeDev \
-    DevelopersGuide/OfficeDev/Clipboard \
+    DevelopersGuide/OfficeDev/Clipboard/java \
     DevelopersGuide/OfficeDev/DesktopEnvironment \
     DevelopersGuide/OfficeDev/DisableCommands \
     DevelopersGuide/OfficeDev/FilterDevelopment/AsciiFilter \
@@ -34,7 +34,7 @@ my_example_dirs_java = \
     DevelopersGuide/OfficeDev/FilterDevelopment/FlatXmlFilter_java \
     DevelopersGuide/OfficeDev/Linguistic \
     DevelopersGuide/OfficeDev/PathSettings \
-    DevelopersGuide/OfficeDev/PathSubstitution \
+    DevelopersGuide/OfficeDev/PathSubstitution/java \
     DevelopersGuide/OfficeDev/TerminationTest/java \
     DevelopersGuide/ProfUNO/InterprocessConn \
     DevelopersGuide/ProfUNO/Lifetime \

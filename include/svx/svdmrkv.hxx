@@ -85,6 +85,7 @@ enum class ImpGetDescriptionOptions
 };
 
 class ImplMarkingOverlay;
+class MarkingSelectionOverlay;
 class MarkingSubSelectionOverlay;
 
 class SVXCORE_DLLPUBLIC SdrMarkView : public SdrSnapView
@@ -96,6 +97,7 @@ class SVXCORE_DLLPUBLIC SdrMarkView : public SdrSnapView
     std::unique_ptr<ImplMarkingOverlay> mpMarkPointsOverlay;
     std::unique_ptr<ImplMarkingOverlay> mpMarkGluePointsOverlay;
 
+    std::unique_ptr<MarkingSelectionOverlay> mpMarkingSelectionOverlay;
     std::unique_ptr<MarkingSubSelectionOverlay> mpMarkingSubSelectionOverlay;
 
 protected:
@@ -258,10 +260,6 @@ protected:
 public:
     // all available const methods for read access to selection
     const SdrMarkList& GetMarkedObjectList() const { return maSdrViewSelection.GetMarkedObjectList(); }
-    // returns SAL_MAX_SIZE if not found
-    SdrPageView* GetSdrPageViewOfMarkedByIndex(size_t nNum) const { return GetMarkedObjectList().GetMark(nNum)->GetPageView(); }
-    SdrObject* GetMarkedObjectByIndex(size_t nNum) const { return GetMarkedObjectList().GetMark(nNum)->GetMarkedSdrObj(); }
-    bool AreObjectsMarked() const { return 0 != GetMarkedObjectList().GetMarkCount(); }
 
     // Get a list of all those links which are connected to marked nodes,
     // but which are not marked themselves.
@@ -442,7 +440,7 @@ public:
     const Point& GetRef2() const { return maRef2; }
     SAL_DLLPRIVATE void SetRef2(const Point& rPt);
     /// Get access to the view shell owning this draw view, if any.
-    virtual SfxViewShell* GetSfxViewShell() const;
+    SAL_RET_MAYBENULL virtual SfxViewShell* GetSfxViewShell() const;
 };
 
 

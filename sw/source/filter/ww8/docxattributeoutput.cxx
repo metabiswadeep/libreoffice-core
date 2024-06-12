@@ -3911,7 +3911,7 @@ void DocxAttributeOutput::WriteBookmarkInActParagraph( const OUString& rName, sa
     m_aBookmarksOfParagraphEnd.insert(std::pair<sal_Int32, OUString>(nLastRunPos, rName));
 }
 
-bool DocxAttributeOutput::StartURL( const OUString& rUrl, const OUString& rTarget )
+bool DocxAttributeOutput::StartURL(const OUString& rUrl, const OUString& rTarget, const OUString& rName)
 {
     OUString sMark;
     OUString sUrl;
@@ -3982,6 +3982,10 @@ bool DocxAttributeOutput::StartURL( const OUString& rUrl, const OUString& rTarge
         if ( !rTarget.isEmpty() )
         {
             m_pHyperlinkAttrList->add(FSNS(XML_w, XML_tgtFrame), rTarget);
+        }
+        else if (!rName.isEmpty())
+        {
+            m_pHyperlinkAttrList->add(FSNS(XML_w, XML_tooltip), rName);
         }
     }
 
@@ -5411,6 +5415,10 @@ void DocxAttributeOutput::FlyFrameGraphic( const SwGrfNode* pGrfNode, const Size
     m_pSerializer->singleElementNS(XML_a, XML_avLst);
     m_pSerializer->endElementNS( XML_a, XML_prstGeom );
 
+    m_rDrawingML.SetFS(m_pSerializer); // to be sure that we write to the right stream
+    if (xShapePropSet)
+        m_rDrawingML.WriteFill(xShapePropSet, awt::Size(aSize.Width(), aSize.Height()));
+
     const SvxBoxItem& rBoxItem = pFrameFormat->GetBox();
     const SvxBorderLine* pLeft = rBoxItem.GetLine(SvxBoxItemLine::LEFT);
     const SvxBorderLine* pRight = rBoxItem.GetLine(SvxBoxItemLine::RIGHT);
@@ -6321,15 +6329,19 @@ void DocxAttributeOutput::WriteFlyFrame(const ww8::Frame& rFrame)
                 // The frame output is postponed to the end of the anchor paragraph
                 bool bDuplicate = false;
                 const OUString& rName = rFrame.GetFrameFormat().GetName();
-                unsigned nSize = m_aFramesOfParagraph.size() ? m_aFramesOfParagraph.top().size() : 0;
-                for( unsigned nIndex = 0; nIndex < nSize; ++nIndex )
+                if (m_aFramesOfParagraph.size() && !rName.isEmpty())
                 {
-                    const OUString& rNameExisting = m_aFramesOfParagraph.top()[nIndex].GetFrameFormat().GetName();
-
-                    if (!rName.isEmpty() && !rNameExisting.isEmpty())
+                    const unsigned nSize = m_aFramesOfParagraph.top().size();
+                    for (unsigned nIndex = 0; nIndex < nSize; ++nIndex)
                     {
+                        const OUString& rNameExisting
+                            = m_aFramesOfParagraph.top()[nIndex].GetFrameFormat().GetName();
+
                         if (rName == rNameExisting)
+                        {
                             bDuplicate = true;
+                            break;
+                        }
                     }
                 }
 
@@ -9644,7 +9656,12 @@ void DocxAttributeOutput::FormatFillStyle( const XFillStyleItem& rFillStyle )
     if (!m_bIgnoreNextFill)
         m_oFillStyle = rFillStyle.GetValue();
     else
+    {
         m_bIgnoreNextFill = false;
+        // ITEM: Still need to signal that ::FormatFillStyle was called so that
+        // ::FormatFillGradient does not assert but do nothing
+        m_oFillStyle = drawing::FillStyle_NONE;
+    }
 
     // Don't round-trip grabbag OriginalBackground if the background has been cleared.
     if ( m_pBackgroundAttrList.is() && m_sOriginalBackgroundColor != "auto" && rFillStyle.GetValue() == drawing::FillStyle_NONE )
@@ -9653,6 +9670,7 @@ void DocxAttributeOutput::FormatFillStyle( const XFillStyleItem& rFillStyle )
 
 void DocxAttributeOutput::FormatFillGradient( const XFillGradientItem& rFillGradient )
 {
+    assert(m_oFillStyle && "ITEM: FormatFillStyle *has* to be called before FormatFillGradient(!)");
     if (m_oFillStyle && *m_oFillStyle == drawing::FillStyle_GRADIENT && !m_rExport.SdrExporter().getDMLTextFrameSyntax())
     {
         const basegfx::BGradient& rGradient = rFillGradient.GetGradientValue();

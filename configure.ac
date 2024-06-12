@@ -9,7 +9,7 @@ dnl in order to create a configure script.
 # several non-alphanumeric characters, those are split off and used only for the
 # ABOUTBOXPRODUCTVERSIONSUFFIX in openoffice.lst. Why that is necessary, no idea.
 
-AC_INIT([LibreOffice],[24.8.0.0.alpha1+],[],[],[http://documentfoundation.org/])
+AC_INIT([LibreOffice],[25.2.0.0.alpha0+],[],[],[http://documentfoundation.org/])
 
 dnl libnumbertext needs autoconf 2.68, but that can pick up autoconf268 just fine if it is installed
 dnl whereas aclocal (as run by autogen.sh) insists on using autoconf and fails hard
@@ -1487,6 +1487,7 @@ if test "$_os" = "Emscripten"; then
     BUILD_TYPE="$BUILD_TYPE EMSCRIPTEN"
 fi
 AC_SUBST(EMSDK_FILE_PACKAGER)
+AC_SUBST(EMSCRIPTEN_EXTRA_SOFFICE_POST_JS)
 
 ###############################################################################
 # Extensions switches --enable/--disable
@@ -1533,7 +1534,7 @@ libo_FUZZ_ARG_ENABLE(extensions,
 
 AC_ARG_ENABLE(scripting,
     AS_HELP_STRING([--disable-scripting],
-        [Disable BASIC, Java and Python. Work in progress, use only if you are hacking on it.]),
+        [Disable BASIC, Java, Python and .NET. Work in progress, use only if you are hacking on it.]),
 ,test "${enable_scripting+set}" = set || enable_scripting=yes)
 
 # This is mainly for Android and iOS, but could potentially be used in some
@@ -2163,6 +2164,10 @@ AC_ARG_ENABLE(xmlhelp,
 AC_ARG_ENABLE(customtarget-components,
     AS_HELP_STRING([--enable-customtarget-components],
         [Generates the static UNO object constructor mapping from the build.]))
+
+AC_ARG_ENABLE(dotnet,
+    AS_HELP_STRING([--enable-dotnet],
+        [Enables or disables .NET 8.0 support and bindings generation.]))
 
 dnl ===================================================================
 dnl Optional Packages (--with/without-)
@@ -3569,6 +3574,46 @@ fi
 COMPATH=`echo $COMPATH | $SED "s@/[[Bb]][[Ii]][[Nn]]\\\$@@"`
 
 dnl ===================================================================
+dnl .NET support
+dnl ===================================================================
+AC_MSG_CHECKING([whether to build with .NET support])
+if test "$enable_dotnet" != "no"; then
+    if test "$DISABLE_SCRIPTING" = TRUE; then
+        AC_MSG_RESULT([no, overridden by --disable-scripting])
+        ENABLE_DOTNET=""
+        enable_dotnet=no
+    else
+        AC_MSG_RESULT([yes])
+        ENABLE_DOTNET="TRUE"
+    fi
+else
+    AC_MSG_RESULT([no])
+    ENABLE_DOTNET=""
+fi
+
+if test "$ENABLE_DOTNET" = TRUE; then
+    AC_PATH_PROG(DOTNET, dotnet)
+    if test "$DOTNET" != ""; then
+        AC_MSG_CHECKING([whether .NET SDK is installed])
+        DOTNET_SDK_VERSION=`dotnet --list-sdks`
+        if test "$DOTNET_SDK_VERSION" != ""; then
+            AC_MSG_RESULT([yes])
+            AC_DEFINE(HAVE_FEATURE_DOTNET)
+        else
+            AC_MSG_RESULT([no])
+            ENABLE_DOTNET=""
+        fi
+    else
+        ENABLE_DOTNET=""
+    fi
+fi
+
+AC_SUBST(ENABLE_DOTNET)
+
+dnl set ENABLE_DOTNET="TRUE" for build-time and run-time .NET support
+dnl set ENABLE_DOTNET="" for no .NET support at all
+
+dnl ===================================================================
 dnl Java support
 dnl ===================================================================
 AC_MSG_CHECKING([whether to build with Java support])
@@ -4170,7 +4215,7 @@ map_vs_year_to_version()
     2022)
         vsversion=17;;
     2022preview)
-        vsversion=17.10;;
+        vsversion=17.11;;
     *)
         AC_MSG_ERROR([Assertion failure - invalid argument "$1" to map_vs_year_to_version()]);;
     esac
@@ -4296,7 +4341,7 @@ find_msvc()
             vcyear=2019
             vctoolset=v142
             ;;
-        17.0 | 17.10)
+        17.0 | 17.11)
             vcyear=2022
             vctoolset=v143
             ;;
@@ -4467,7 +4512,7 @@ if test "$_os" = "WINNT"; then
         # are always "better", we list them in reverse chronological order.
 
         case "$vcnumwithdot" in
-        16.0 | 17.0 | 17.10)
+        16.0 | 17.0 | 17.11)
             WINDOWS_SDK_ACCEPTABLE_VERSIONS="10.0 8.1A 8.1 8.0"
             ;;
         esac
@@ -4991,7 +5036,7 @@ if test "$enable_split_debug" != no; then
     fi
     if test -n "$use_split_debug"; then
         if test "$_os" = "Emscripten"; then
-            TEST_CC_FLAG=-gseparate-dwarf
+            TEST_CC_FLAG=-gsplit-dwarf -gpubnames
         else
             TEST_CC_FLAG=-gsplit-dwarf
         fi
@@ -6854,7 +6899,7 @@ find_msms()
 
     msmdir=
     case "$VCVER" in
-    16.0 | 17.0 | 17.10)
+    16.0 | 17.0 | 17.11)
         for l in `ls -1 $VC_PRODUCT_DIR/redist/MSVC/`; do
             my_msm_dir="$VC_PRODUCT_DIR/redist/MSVC/$l/MergeModules/"
             echo "$as_me:$LINENO: looking for $my_msm_dir${my_msm_file}])" >&5
@@ -6890,7 +6935,7 @@ find_msvc_x64_dlls()
 
     msvcdllpath="$VC_PRODUCT_DIR/redist/x64/Microsoft.VC${VCVER}.CRT"
     case "$VCVER" in
-    16.0 | 17.0 | 17.10)
+    16.0 | 17.0 | 17.11)
         for crtver in 141 142 143; do
             for l in `ls -1 $VC_PRODUCT_DIR/redist/MSVC/`; do
                 echo "$as_me:$LINENO: testing $VC_PRODUCT_DIR/redist/MSVC/$l/x64/Microsoft.VC$crtver.CRT" >&5
@@ -10230,7 +10275,7 @@ fi
 if test \( "$cross_compiling" = yes -a -z "$PYTHON_FOR_BUILD" \) -o "$enable_python" = internal; then
     SYSTEM_PYTHON=
     PYTHON_VERSION_MAJOR=3
-    PYTHON_VERSION_MINOR=8
+    PYTHON_VERSION_MINOR=9
     PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.19
     if ! grep -q -i python.*${PYTHON_VERSION} ${SRC_ROOT}/download.lst; then
         AC_MSG_ERROR([PYTHON_VERSION ${PYTHON_VERSION} but no matching file in download.lst])
@@ -11048,7 +11093,7 @@ dnl ===================================================================
 dnl Check for system icu
 dnl ===================================================================
 ICU_MAJOR=74
-ICU_MINOR=1
+ICU_MINOR=2
 ICU_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/icu/source/i18n -I${WORKDIR}/UnpackedTarball/icu/source/common"
 ICU_LIBS_internal="-L${WORKDIR}/UnpackedTarball/icu/source/lib"
 libo_CHECK_SYSTEM_MODULE([icu],[ICU],[icu-i18n >= 66])
@@ -14487,14 +14532,14 @@ dnl ===================================================================
 AC_MSG_CHECKING([which languages to be built])
 # get list of all languages
 # generate shell variable from completelangiso= from solenv/inc/langlist.mk
-# the sed command does the following:
-#   + if a line ends with a backslash, append the next line to it
-#   + adds " on the beginning of the value (after =)
-#   + adds " at the end of the value
-#   + removes en-US; we want to put it on the beginning
-#   + prints just the section starting with 'completelangiso=' and ending with the " at the end of line
-[eval $(sed -e :a -e '/\\$/N; s/\\\n//; ta' -n -e 's/=/="/;s/\([^\\]\)$/\1"/;s/en-US//;/^completelangiso/p' $SRC_ROOT/solenv/inc/langlist.mk)]
-ALL_LANGS="en-US $completelangiso"
+# we want en-US at the beginning
+ALL_LANGS=$($GNUMAKE SRC_ROOT=$SRC_ROOT WITH_LANG="$with_lang" ENABLE_RELEASE_BUILD="$ENABLE_RELEASE_BUILD" -sr -f - <<'EOF' | tr -d '\r'
+include $(SRC_ROOT)/solenv/inc/langlist.mk
+all:
+	$(info en-US $(filter-out en-US,$(sort $(completelangiso))))
+EOF
+)
+
 # check the configured localizations
 WITH_LANG="$with_lang"
 

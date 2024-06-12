@@ -353,7 +353,7 @@ public:
      */
     void Init();
 
-    /// Is called by DoIdleJob_(), ExecSpellPopup() and UpDown()
+    /// Is called by DoIdleJob_() and ExecSpellPopup()
     SwRect AutoSpell_(SwTextNode &, sal_Int32);
 
     /// Is called by DoIdleJob_()
@@ -419,7 +419,8 @@ public:
 
     void   PaintExtraData( const SwRect & rRect ) const; /// Page number etc.
     SwRect GetPaintSwRect();
-    virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&, PaintFrameMode mode = PAINT_ALL ) const override;
+    virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&, PaintFrameMode mode = PAINT_ALL,
+                        SwPrintData const*const pPrintData = nullptr ) const override;
 
     /**
      * Layout oriented cursor travelling:
@@ -665,7 +666,7 @@ public:
     tools::Long GetLineSpace( const bool _bNoPropLineSpacing = false ) const;
 
     /// Returns the first line height
-    sal_uInt16 FirstLineHeight() const;
+    SwTwips FirstLineHeight() const;
 
     /// Rewires FlyInContentFrame, if nEnd > Index >= nStart
     void MoveFlyInCnt(SwTextFrame *pNew, TextFrameIndex nStart, TextFrameIndex nEnd);

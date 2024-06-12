@@ -48,6 +48,7 @@
 #include <document.hxx>
 #include <dociter.hxx>
 #include <docsh.hxx>
+#include <sfx2/linkmgr.hxx>
 #include <formulacell.hxx>
 #include <scmatrix.hxx>
 #include <docoptio.hxx>
@@ -5740,7 +5741,8 @@ void ScInterpreter::IterateParametersIf( ScIterFuncIf eFunc )
                 ScMatrixRef pResultMatrix = QueryMat( pQueryMatrix, aOptions);
                 if (nGlobalError != FormulaError::NONE || !pResultMatrix)
                 {
-                    SetError( FormulaError::IllegalParameter);
+                    PushIllegalParameter();
+                    return;
                 }
 
                 if (pSumExtraMatrix)
@@ -5757,6 +5759,25 @@ void ScInterpreter::IterateParametersIf( ScIterFuncIf eFunc )
                                 if (pSumExtraMatrix->IsValue( nC, nR))
                                 {
                                     fVal = pSumExtraMatrix->GetDouble( nC, nR);
+                                    ++fCount;
+                                    fSum += fVal;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (!bSumExtraRange)
+                {
+                    for (SCCOL nCol = nCol1; nCol <= nCol2; ++nCol)
+                    {
+                        for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
+                        {
+                            if (pResultMatrix->IsValue( nCol, nRow) &&
+                                    pResultMatrix->GetDouble( nCol, nRow))
+                            {
+                                if (pQueryMatrix->IsValue( nCol, nRow))
+                                {
+                                    fVal = pQueryMatrix->GetDouble( nCol, nRow);
                                     ++fCount;
                                     fSum += fVal;
                                 }
@@ -8183,7 +8204,9 @@ void ScInterpreter::ScXLookup()
                                 ri = nX;
                                 rj = nY + j;
                             }
-                            if (prMat->IsStringOrEmpty(ri, rj))
+                            if (prMat->IsEmptyCell(ri, rj))
+                                pResMat->PutEmpty(i, j);
+                            else if (prMat->IsStringOrEmpty(ri, rj))
                                 pResMat->PutString(prMat->GetString(ri, rj), i, j);
                             else
                                 pResMat->PutDouble(prMat->GetDouble(ri, rj), i, j);
@@ -8361,7 +8384,9 @@ void ScInterpreter::ScFilter()
             {
                 if (aResValues[iC] > 0)
                 {
-                    if (pQueryMatrix->IsStringOrEmpty(iC, iR))
+                    if (pQueryMatrix->IsEmptyCell(iC, iR))
+                        pResMat->PutEmptyTrans(nResPos++);
+                    else if (pQueryMatrix->IsStringOrEmpty(iC, iR))
                         pResMat->PutStringTrans(pQueryMatrix->GetString(iC, iR), nResPos++);
                     else
                         pResMat->PutDoubleTrans(pQueryMatrix->GetDouble(iC, iR), nResPos++);
@@ -8378,7 +8403,9 @@ void ScInterpreter::ScFilter()
             {
                 if (aResValues[iR] > 0)
                 {
-                    if (pQueryMatrix->IsStringOrEmpty(iC, iR))
+                    if (pQueryMatrix->IsEmptyCell(iC, iR))
+                        pResMat->PutEmpty(nResPos++);
+                    else if (pQueryMatrix->IsStringOrEmpty(iC, iR))
                         pResMat->PutString(pQueryMatrix->GetString(iC, iR), nResPos++);
                     else
                         pResMat->PutDouble(pQueryMatrix->GetDouble(iC, iR), nResPos++);
@@ -8645,7 +8672,14 @@ void ScInterpreter::ScSortBy()
                 {
                     for (SCSIZE rj = 0; rj < nbyR; rj++)//row
                     {
-                        if (pMatSortBy->IsStringOrEmpty(ci, rj))
+                        if (pMatSortBy->IsEmptyCell(ci, rj))
+                        {
+                            if (aSortData.bByRow)
+                                pFullMatSortBy->PutEmpty(ci + nSortBy, rj);
+                            else
+                                pFullMatSortBy->PutEmpty(ci, rj + nSortBy);
+                        }
+                        else if (pMatSortBy->IsStringOrEmpty(ci, rj))
                         {
                             if (aSortData.bByRow)
                                 pFullMatSortBy->PutString(pMatSortBy->GetString(ci, rj), ci + nSortBy, rj);
@@ -8861,7 +8895,11 @@ void ScInterpreter::ScUnique()
         {
             for (SCSIZE col = 0; col < nsC; col++)
             {
-                if (!pMatSource->IsStringOrEmpty(col, aResPos[iPos].first))
+                if (pMatSource->IsEmptyCell(col, aResPos[iPos].first))
+                {
+                    pResMat->PutEmpty(col, iPos);
+                }
+                else if (!pMatSource->IsStringOrEmpty(col, aResPos[iPos].first))
                 {
                     pResMat->PutDouble(pMatSource->GetDouble(col, aResPos[iPos].first), col, iPos);
                 }
@@ -8875,7 +8913,11 @@ void ScInterpreter::ScUnique()
         {
             for (SCSIZE row = 0; row < nsR; row++)
             {
-                if (!pMatSource->IsStringOrEmpty(aResPos[iPos].first, row))
+                if (pMatSource->IsEmptyCell(aResPos[iPos].first, row))
+                {
+                    pResMat->PutEmpty(iPos, row);
+                }
+                else if (!pMatSource->IsStringOrEmpty(aResPos[iPos].first, row))
                 {
                     pResMat->PutDouble(pMatSource->GetDouble(aResPos[iPos].first, row), iPos, row);
                 }
@@ -8895,6 +8937,172 @@ void ScInterpreter::ScUnique()
     {
         PushMatrix(pResMat);
     }
+}
+
+void ScInterpreter::getTokensAtParameter( std::unique_ptr<ScTokenArray>& pTokens, short nPos )
+{
+    sal_uInt16 nOpen = 0;
+    sal_uInt16 nSepCount = 0;
+    formula::FormulaTokenArrayPlainIterator aIter(*pArr);
+    formula::FormulaToken* t = aIter.First();
+    for (t = aIter.NextNoSpaces(); t; t = aIter.NextNoSpaces())
+    {
+        OpCode aOpCode = t->GetOpCode();
+        formula::StackVar aIntType = t->GetType();
+        if ((aOpCode == ocOpen || aOpCode == ocArrayOpen || aOpCode == ocTableRefOpen) && aIntType == formula::StackVar::svSep)
+            nOpen++;
+        else if ((aOpCode == ocClose || aOpCode == ocArrayClose || aOpCode == ocTableRefClose) && aIntType == formula::StackVar::svSep)
+            nOpen--;
+        else if (aOpCode == ocSep && aIntType == formula::StackVar::svSep && nOpen == 1)
+        {
+            nSepCount++;
+            continue;
+        }
+
+        if (nSepCount == nPos && nOpen > 0)
+        {
+            pTokens->AddToken(*t->Clone());
+        }
+    }
+}
+
+void ScInterpreter::replaceNamesToResult( const std::unordered_map<OUString, formula::FormulaToken*> nResultIndexes,
+    std::unique_ptr<ScTokenArray>& pTokens )
+{
+    formula::FormulaTokenArrayPlainIterator aIterResult(*pTokens);
+    for (FormulaToken* t = aIterResult.GetNextStringName(); t; t = aIterResult.GetNextStringName())
+    {
+        auto iRes = nResultIndexes.find(t->GetString().getString());
+        if (iRes != nResultIndexes.end())
+            pTokens->ReplaceToken(aIterResult.GetIndex() - 1, iRes->second->Clone(),
+                FormulaTokenArray::ReplaceMode::CODE_ONLY);
+    }
+}
+
+void ScInterpreter::ScLet()
+{
+    const short* pJump = pCur->GetJump();
+    short nJumpCount = pJump[0];
+    short nOrgJumpCount = nJumpCount;
+
+    if (nJumpCount < 3 || (nJumpCount % 2 != 1))
+    {
+        PushError(FormulaError::ParameterExpected);
+        aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
+        return;
+    }
+
+    OUString aStrName;
+    std::unordered_map<OUString, formula::FormulaToken*> nResultIndexes;
+    formula::FormulaTokenArrayPlainIterator aIter(*pArr);
+    unique_ptr<ScTokenArray> pValueTokens(new ScTokenArray(mrDoc));
+
+    // name and function pairs parameter
+    while (nJumpCount > 1)
+    {
+        if (nJumpCount == nOrgJumpCount)
+        {
+            aStrName = GetString().getString();
+        }
+        else if ((nOrgJumpCount - nJumpCount + 1) % 2 == 1)
+        {
+            aIter.Jump(pJump[static_cast<short>(nOrgJumpCount - nJumpCount + 1)] - 1);
+            FormulaToken* t = aIter.NextRPN();
+            aStrName = t->GetString().getString();
+        }
+        else
+        {
+            PushError(FormulaError::ParameterExpected);
+            aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
+            return;
+        }
+        nJumpCount--;
+
+        // get value tokens
+        getTokensAtParameter(pValueTokens, nOrgJumpCount - nJumpCount);
+        nJumpCount--;
+
+        // replace names with result tokens
+        replaceNamesToResult(nResultIndexes, pValueTokens);
+
+        // calculate the inner results unless we already have a push result token
+        if (pValueTokens->GetLen() == 1 && pValueTokens->GetArray()[0]->GetOpCode() == ocPush)
+        {
+            if (!nResultIndexes.insert(std::make_pair(aStrName, pValueTokens->GetArray()[0]->Clone())).second)
+            {
+                PushIllegalParameter();
+                aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
+                return;
+            }
+        }
+        else
+        {
+            ScCompiler aComp(mrDoc, aPos, *pValueTokens, mrDoc.GetGrammar(), false, false, &mrContext);
+            aComp.CompileTokenArray();
+            ScInterpreter aInt(mrDoc.GetFormulaCell(aPos), mrDoc, mrContext, aPos, *pValueTokens);
+            sfx2::LinkManager aNewLinkMgr(mrDoc.GetDocumentShell());
+            aInt.SetLinkManager(&aNewLinkMgr);
+            formula::StackVar aIntType = aInt.Interpret();
+
+            if (aIntType == formula::svMatrixCell)
+            {
+                ScConstMatrixRef xMat(aInt.GetResultToken()->GetMatrix());
+                if (!nResultIndexes.insert(std::make_pair(aStrName, new ScMatrixToken(xMat->Clone()))).second)
+                {
+                    PushIllegalParameter();
+                    aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
+                    return;
+                }
+            }
+            else
+            {
+                FormulaConstTokenRef xTok(aInt.GetResultToken());
+                if (!nResultIndexes.insert(std::make_pair(aStrName, xTok->Clone())).second)
+                {
+                    PushIllegalParameter();
+                    aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
+                    return;
+                }
+            }
+        }
+        pValueTokens->Clear();
+    }
+
+    // last parameter: calculation
+    getTokensAtParameter(pValueTokens, nOrgJumpCount - nJumpCount);
+    nJumpCount--;
+
+    // replace names with result tokens
+    replaceNamesToResult(nResultIndexes, pValueTokens);
+
+    // calculate the final result
+    ScCompiler aComp(mrDoc, aPos, *pValueTokens, mrDoc.GetGrammar(), false, false, &mrContext);
+    aComp.CompileTokenArray();
+    ScInterpreter aInt(mrDoc.GetFormulaCell(aPos), mrDoc, mrContext, aPos, *pValueTokens);
+    sfx2::LinkManager aNewLinkMgr(mrDoc.GetDocumentShell());
+    aInt.SetLinkManager(&aNewLinkMgr);
+    formula::StackVar aIntType = aInt.Interpret();
+
+    if (aIntType == formula::svMatrixCell)
+    {
+        ScConstMatrixRef xMat(aInt.GetResultToken()->GetMatrix());
+        PushTokenRef(new ScMatrixToken(xMat->Clone()));
+    }
+    else
+    {
+        formula::FormulaConstTokenRef xLambdaResult(aInt.GetResultToken());
+        if (xLambdaResult)
+        {
+            nGlobalError = xLambdaResult->GetError();
+            if (nGlobalError == FormulaError::NONE)
+                PushTokenRef(xLambdaResult);
+            else
+                PushError(nGlobalError);
+        }
+    }
+
+    pValueTokens.reset();
+    aCode.Jump(pJump[nOrgJumpCount], pJump[nOrgJumpCount]);
 }
 
 void ScInterpreter::ScSubTotal()
@@ -11702,6 +11910,13 @@ bool ScInterpreter::SearchVectorForValue( VectorSearchArguments& vsa )
             // this mode can only used with XLOOKUP/XMATCH
             if ( vsa.nSearchOpCode == SC_OPCODE_X_LOOKUP || vsa.nSearchOpCode == SC_OPCODE_X_MATCH )
             {
+                // Wildcard search mode with binary search is not allowed
+                if (vsa.eSearchMode == searchbasc || vsa.eSearchMode == searchbdesc)
+                {
+                    PushNoValue();
+                    return false;
+                }
+
                 rEntry.eOp = SC_EQUAL;
                 if ( vsa.isStringSearch )
                 {

@@ -20,7 +20,7 @@ gb_EMSCRIPTEN_LDFLAGS += -s TOTAL_MEMORY=1GB -s PTHREAD_POOL_SIZE=4
 # To keep the link time (and memory) down, prevent all rewriting options from wasm-emscripten-finalize
 # See emscripten.py, finalize_wasm, modify_wasm = True
 # So we need WASM_BIGINT=1 and ASSERTIONS=1 (2 implies STACK_OVERFLOW_CHECK)
-gb_EMSCRIPTEN_LDFLAGS += --bind -s FORCE_FILESYSTEM=1 -s WASM_BIGINT=1 -s ERROR_ON_UNDEFINED_SYMBOLS=1 -s FETCH=1 -s ASSERTIONS=1 -s EXIT_RUNTIME=0 -s EXPORTED_RUNTIME_METHODS=["UTF16ToString","stringToUTF16","UTF8ToString","ccall","cwrap","addOnPreMain"$(if $(ENABLE_DBGUTIL),$(COMMA)"addOnPostRun"),"registerType","throwBindingError"$(if $(ENABLE_QT6),$(COMMA)"callMain"$(COMMA)"specialHTMLTargets")]
+gb_EMSCRIPTEN_LDFLAGS += --bind -s FORCE_FILESYSTEM=1 -s WASM_BIGINT=1 -s ERROR_ON_UNDEFINED_SYMBOLS=1 -s FETCH=1 -s ASSERTIONS=1 -s EXIT_RUNTIME=0 -s EXPORTED_RUNTIME_METHODS=["UTF16ToString","stringToUTF16","UTF8ToString","ccall","cwrap","addOnPreMain","addOnPostRun","registerType","throwBindingError"$(if $(ENABLE_QT6),$(COMMA)"callMain"$(COMMA)"specialHTMLTargets")]
 gb_EMSCRIPTEN_QTDEFS := -DQT_NO_LINKED_LIST -DQT_NO_JAVA_STYLE_ITERATORS -DQT_NO_EXCEPTIONS -DQT_NO_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB
 
 gb_Executable_EXT := .html
@@ -48,7 +48,7 @@ gb_LINKERSTRIPDEBUGFLAGS :=
 gb_DEBUGINFO_FLAGS = -g
 
 ifeq ($(HAVE_EXTERNAL_DWARF),TRUE)
-gb_DEBUGINFO_FLAGS += -gseparate-dwarf
+gb_DEBUGINFO_FLAGS += -gsplit-dwarf -gpubnames
 endif
 
 gb_COMPILEROPTFLAGS := -O3
@@ -65,6 +65,7 @@ $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.wasm,$(3)) \
         $(patsubst %.lib,%.js,$(3)) \
         $(patsubst %.lib,%.worker.js,$(3)) \
+        $(patsubst %.lib,%.wasm.dwp,$(3)) \
 )
 
 endef
@@ -75,6 +76,7 @@ $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.wasm,$(3)) \
         $(patsubst %.lib,%.js,$(3)) \
         $(patsubst %.lib,%.worker.js,$(3)) \
+        $(patsubst %.lib,%.wasm.dwp,$(3)) \
 )
 
 endef

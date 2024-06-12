@@ -26,7 +26,6 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <vcl/salgtype.hxx>
 #include <vcl/event.hxx>
-#include <vcl/help.hxx>
 #include <vcl/cursor.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/transfer.hxx>
@@ -3105,27 +3104,15 @@ const Wallpaper& Window::GetDisplayBackground() const
 
 const OUString& Window::GetHelpText() const
 {
-    OUString aStrHelpId( GetHelpId() );
-    bool bStrHelpId = !aStrHelpId.isEmpty();
+    const OUString& rStrHelpId(GetHelpId());
+    const bool bStrHelpId = !rStrHelpId.isEmpty();
 
-    if ( !mpWindowImpl->maHelpText.getLength() && bStrHelpId )
-    {
-        if ( !IsDialog() && (mpWindowImpl->mnType != WindowType::TABPAGE) && (mpWindowImpl->mnType != WindowType::FLOATINGWINDOW) )
-        {
-            Help* pHelp = Application::GetHelp();
-            if ( pHelp )
-            {
-                mpWindowImpl->maHelpText = pHelp->GetHelpText(aStrHelpId, this);
-                mpWindowImpl->mbHelpTextDynamic = false;
-            }
-        }
-    }
-    else if( mpWindowImpl->mbHelpTextDynamic && bStrHelpId )
+    if (mpWindowImpl->mbHelpTextDynamic && bStrHelpId)
     {
         static const char* pEnv = getenv( "HELP_DEBUG" );
         if( pEnv && *pEnv )
         {
-            mpWindowImpl->maHelpText = mpWindowImpl->maHelpText + "\n------------------\n" + aStrHelpId;
+            mpWindowImpl->maHelpText = mpWindowImpl->maHelpText + "\n------------------\n" + rStrHelpId;
         }
         mpWindowImpl->mbHelpTextDynamic = false;
     }

@@ -119,7 +119,7 @@ IMPL_STATIC_LINK( SwTextShell, DialogClosedHdl, css::ui::dialogs::DialogClosedEv
 
 void SwTextShell::InitInterface_Impl()
 {
-    GetStaticInterface()->RegisterPopupMenu("text");
+    GetStaticInterface()->RegisterPopupMenu(u"text"_ustr);
 
     GetStaticInterface()->RegisterObjectBar(SFX_OBJECTBAR_OBJECT, SfxVisibilityFlags::Invisible, ToolbarId::Text_Toolbox_Sw);
 
@@ -333,27 +333,27 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
                     if ( pMarginItem )
                         aMargin = pMarginItem->GetSize();
 
-                    xSet->setPropertyValue("FrameURL", uno::Any( pURLItem->GetValue() ) );
+                    xSet->setPropertyValue(u"FrameURL"_ustr, uno::Any( pURLItem->GetValue() ) );
                     if ( pNameItem )
-                        xSet->setPropertyValue("FrameName", uno::Any( pNameItem->GetValue() ) );
+                        xSet->setPropertyValue(u"FrameName"_ustr, uno::Any( pNameItem->GetValue() ) );
 
                     if ( eScroll == ScrollingMode::Auto )
-                        xSet->setPropertyValue("FrameIsAutoScroll",
+                        xSet->setPropertyValue(u"FrameIsAutoScroll"_ustr,
                             uno::Any( true ) );
                     else
-                        xSet->setPropertyValue("FrameIsScrollingMode",
+                        xSet->setPropertyValue(u"FrameIsScrollingMode"_ustr,
                             uno::Any( eScroll == ScrollingMode::Yes ) );
 
                     if ( pBorderItem )
-                        xSet->setPropertyValue("FrameIsBorder",
+                        xSet->setPropertyValue(u"FrameIsBorder"_ustr,
                             uno::Any( pBorderItem->GetValue() ) );
 
                     if ( pMarginItem )
                     {
-                        xSet->setPropertyValue("FrameMarginWidth",
+                        xSet->setPropertyValue(u"FrameMarginWidth"_ustr,
                             uno::Any( sal_Int32( aMargin.Width() ) ) );
 
-                        xSet->setPropertyValue("FrameMarginHeight",
+                        xSet->setPropertyValue(u"FrameMarginHeight"_ustr,
                             uno::Any( sal_Int32( aMargin.Height() ) ) );
                     }
                 }
@@ -529,7 +529,7 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
             FieldUnit eMetric = ::GetDfltMetric(dynamic_cast<SwWebDocShell*>( GetView().GetDocShell()) != nullptr );
             SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric)));
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateFrameTabDialog("FrameDialog",
+            VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateFrameTabDialog(u"FrameDialog"_ustr,
                                                   GetView().GetViewFrame(),
                                                   GetView().GetFrameWeld(),
                                                   aSet));
@@ -831,7 +831,7 @@ void  SwTextShell::ExecDelete(SfxRequest &rReq)
     rReq.Done();
 }
 
-void SwTextShell::ExecTransliteration( SfxRequest const & rReq )
+void SwTextShell::ExecTransliteration( SfxRequest& rReq )
 {
     using namespace ::com::sun::star::i18n;
     TransliterationFlags nMode = TransliterationFlags::NONE;
@@ -873,10 +873,13 @@ void SwTextShell::ExecTransliteration( SfxRequest const & rReq )
     }
 
     if( nMode != TransliterationFlags::NONE )
+    {
         GetShell().TransliterateText( nMode );
+        rReq.Done();
+    }
 }
 
-void SwTextShell::ExecRotateTransliteration( SfxRequest const & rReq )
+void SwTextShell::ExecRotateTransliteration( SfxRequest& rReq )
 {
     if( rReq.GetSlot() == SID_TRANSLITERATE_ROTATE_CASE )
     {
@@ -892,13 +895,17 @@ void SwTextShell::ExecRotateTransliteration( SfxRequest const & rReq )
                     transFlags = m_aRotateCase.getNextMode();
             }
             rSh.TransliterateText(transFlags);
+            rReq.Done();
         }
         else
         {
             if (bSentenceCase)
                 transFlags = m_aRotateCase.getNextMode();
             if ((rSh.IsEndWrd() || rSh.IsStartWord() || rSh.IsInWord()) && rSh.SelWrd(nullptr, i18n::WordType::WORD_COUNT))
+            {
                 rSh.TransliterateText(transFlags);
+                rReq.Done();
+            }
         }
     }
 }
@@ -906,7 +913,7 @@ void SwTextShell::ExecRotateTransliteration( SfxRequest const & rReq )
 SwTextShell::SwTextShell(SwView &_rView) :
     SwBaseShell(_rView)
 {
-    SetName("Text");
+    SetName(u"Text"_ustr);
     SfxShell::SetContextName(vcl::EnumContext::GetContextName(vcl::EnumContext::Context::Text));
 }
 

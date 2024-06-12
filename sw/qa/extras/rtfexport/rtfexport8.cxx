@@ -39,6 +39,7 @@
 #include <frmmgr.hxx>
 #include <formatflysplit.hxx>
 #include <fmtwrapinfluenceonobjpos.hxx>
+#include <fmtftntx.hxx>
 
 using namespace css;
 
@@ -48,7 +49,7 @@ class Test : public SwModelTestBase
 {
 public:
     Test()
-        : SwModelTestBase("/sw/qa/extras/rtfexport/data/", "Rich Text Format")
+        : SwModelTestBase(u"/sw/qa/extras/rtfexport/data/"_ustr, u"Rich Text Format"_ustr)
     {
     }
 };
@@ -173,6 +174,36 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf158586_lostFrame)
     verify();
 }
 
+CPPUNIT_TEST_FIXTURE(Test, testEndnotesAtSectEndRTF)
+{
+    // Given a document, endnotes at collected at section end:
+    createSwDoc();
+    {
+        SwWrtShell* pWrtShell = getSwDocShell()->GetWrtShell();
+        pWrtShell->SplitNode();
+        pWrtShell->Up(/*bSelect=*/false);
+        pWrtShell->Insert("x");
+        pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/true, 1, /*bBasicCall=*/false);
+        SwSectionData aSection(SectionType::Content, pWrtShell->GetUniqueSectionName());
+        pWrtShell->StartAction();
+        SfxItemSetFixed<RES_FTN_AT_TXTEND, RES_FRAMEDIR> aSet(pWrtShell->GetAttrPool());
+        aSet.Put(SwFormatEndAtTextEnd(FTNEND_ATTXTEND));
+        pWrtShell->InsertSection(aSection, &aSet);
+        pWrtShell->EndAction();
+        pWrtShell->InsertFootnote(OUString(), /*bEndNote=*/true);
+    }
+
+    // When saving to DOC:
+    saveAndReload(mpFilter);
+
+    // Then make sure the endnote position is section end:
+    SwDoc* pDoc = getSwDoc();
+    SwSectionFormats& rSections = pDoc->GetSections();
+    SwSectionFormat* pFormat = rSections[0];
+    // Without the accompanying fix in place, this test would have failed, endnotes were at doc end.
+    CPPUNIT_ASSERT(pFormat->GetEndAtTextEnd().IsAtEnd());
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testTdf158983)
 {
     auto verify = [this]() {
@@ -250,8 +281,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf159824_axialGradient)
                                                          uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xFrame(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(drawing::FillStyle_GRADIENT,
-                         getProperty<drawing::FillStyle>(xFrame, "FillStyle"));
-    awt::Gradient2 aGradient = getProperty<awt::Gradient2>(xFrame, "FillGradient");
+                         getProperty<drawing::FillStyle>(xFrame, u"FillStyle"_ustr));
+    awt::Gradient2 aGradient = getProperty<awt::Gradient2>(xFrame, u"FillGradient"_ustr);
 
     const Color aColA(0x127622); // green
     const Color aColB(0xffffff); // white

@@ -86,7 +86,6 @@ using namespace ::com::sun::star::linguistic2;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
 
-#define CHAR_UNDERSCORE u'_'
 #define CHAR_LEFT_ARROW u'\x25C0'
 #define CHAR_RIGHT_ARROW u'\x25B6'
 #define CHAR_TAB u'\x2192'
@@ -151,7 +150,7 @@ void SwLineInfo::CtorInitLineInfo( const SwAttrSet& rAttrSet,
 
     m_pSpace = &rAttrSet.GetLineSpacing();
     m_nVertAlign = rAttrSet.GetParaVertAlign().GetValue();
-    m_nDefTabStop = USHRT_MAX;
+    m_nDefTabStop = std::numeric_limits<SwTwips>::max();
 }
 
 void SwTextInfo::CtorInitTextInfo( SwTextFrame *pFrame )
@@ -437,8 +436,9 @@ SwTextSizeInfo::GetTextSize(std::optional<SwLinePortionLayoutContext> nLayoutCon
 void SwTextSizeInfo::GetTextSize(const SwScriptInfo* pSI, const TextFrameIndex nIndex,
                                  const TextFrameIndex nLength,
                                  std::optional<SwLinePortionLayoutContext> nLayoutContext,
-                                 const sal_uInt16 nComp, sal_uInt16& nMinSize,
-                                 sal_uInt16& nMaxSizeDiff,
+                                 const sal_uInt16 nComp, SwTwips& nMinSize,
+                                 tools::Long& nMaxSizeDiff, SwTwips& nExtraAscent,
+                                 SwTwips& nExtraDescent,
                                  vcl::text::TextLayoutCache const* const pCache) const
 {
     SwDrawTextInfo aDrawInf(m_pVsh, *m_pOut, pSI, *m_pText, nIndex, nLength, nLayoutContext, 0,
@@ -448,7 +448,9 @@ void SwTextSizeInfo::GetTextSize(const SwScriptInfo* pSI, const TextFrameIndex n
     aDrawInf.SetSnapToGrid( SnapToGrid() );
     aDrawInf.SetKanaComp( nComp );
     SwPosSize aSize( m_pFnt->GetTextSize_( aDrawInf ) );
-    nMaxSizeDiff = o3tl::narrowing<sal_uInt16>(aDrawInf.GetKanaDiff());
+    nMaxSizeDiff = aDrawInf.GetKanaDiff();
+    nExtraAscent = aDrawInf.GetExtraAscent();
+    nExtraDescent = aDrawInf.GetExtraDescent();
     nMinSize = aSize.Width();
 }
 
@@ -945,8 +947,8 @@ static void lcl_DrawSpecial( const SwTextPaintInfo& rTextPaintInfo, const SwLine
 
     Point aTmpPos( nX, nY );
     rNonConstTextPaintInfo.SetPos( aTmpPos );
-    sal_uInt16 nOldWidth = rPor.Width();
-    const_cast<SwLinePortion&>(rPor).Width( o3tl::narrowing<sal_uInt16>(aFontSize.Width()) );
+    SwTwips nOldWidth = rPor.Width();
+    const_cast<SwLinePortion&>(rPor).Width(aFontSize.Width());
     rTextPaintInfo.DrawText( aTmp, rPor );
     const_cast<SwLinePortion&>(rPor).Width( nOldWidth );
     rNonConstTextPaintInfo.SetFont( const_cast<SwFont*>(pOldFnt) );
@@ -994,7 +996,7 @@ void SwTextPaintInfo::DrawLineBreak( const SwLinePortion &rPor ) const
         eClear = rBreakPortion.GetClear();
     }
 
-    sal_uInt16 nOldWidth = rPor.Width();
+    SwTwips nOldWidth = rPor.Width();
     const_cast<SwLinePortion&>(rPor).Width( LINE_BREAK_WIDTH );
 
     SwRect aRect;
@@ -1069,7 +1071,7 @@ void SwTextPaintInfo::DrawPostIts( bool bScript ) const
     Size aSize;
     Point aTmp;
 
-    const sal_uInt16 nPostItsWidth = SwViewOption::GetPostItsWidth( GetOut() );
+    const SwTwips nPostItsWidth = SwViewOption::GetPostItsWidth(GetOut());
     const sal_uInt16 nFontHeight = m_pFnt->GetHeight( m_pVsh, *GetOut() );
     const sal_uInt16 nFontAscent = m_pFnt->GetAscent( m_pVsh, *GetOut() );
 
@@ -1624,6 +1626,8 @@ void SwTextFormatInfo::CtorInitTextFormatInfo( OutputDevice* pRenderContext, SwT
     m_nFirst = 0;
     m_nRealWidth = 0;
     m_nForcedLeftMargin = 0;
+    m_nExtraAscent = 0;
+    m_nExtraDescent = 0;
     m_pRest = nullptr;
     m_nLineHeight = 0;
     m_nLineNetHeight = 0;
@@ -1722,8 +1726,9 @@ void SwTextFormatInfo::Init()
     m_cTabDecimal = 0;
     m_nWidth = m_nRealWidth;
     m_nForcedLeftMargin = 0;
+    m_nExtraAscent = 0;
+    m_nExtraDescent = 0;
     m_nSoftHyphPos = TextFrameIndex(0);
-    m_nUnderScorePos = TextFrameIndex(COMPLETE_STRING);
     m_nLastBookmarkPos = TextFrameIndex(-1);
     m_cHookChar = 0;
     SetIdx(TextFrameIndex(0));
@@ -1756,15 +1761,16 @@ SwTextFormatInfo::SwTextFormatInfo( const SwTextFormatInfo& rInf,
     m_pLastTab(nullptr),
     m_nSoftHyphPos(TextFrameIndex(0)),
     m_nLineStart(rInf.GetIdx()),
-    m_nUnderScorePos(TextFrameIndex(COMPLETE_STRING)),
     m_nLeft(rInf.m_nLeft),
     m_nRight(rInf.m_nRight),
     m_nFirst(rInf.m_nLeft),
-    m_nRealWidth(sal_uInt16(nActWidth)),
+    m_nRealWidth(nActWidth),
     m_nWidth(m_nRealWidth),
     m_nLineHeight(0),
     m_nLineNetHeight(0),
     m_nForcedLeftMargin(0),
+    m_nExtraAscent(0),
+    m_nExtraDescent(0),
     m_bFull(false),
     m_bFootnoteDone(true),
     m_bErgoDone(true),
@@ -1825,7 +1831,7 @@ void SwTextFormatInfo::SetLast(SwLinePortion* pNewLast)
 
 bool SwTextFormatInfo::CheckFootnotePortion_( SwLineLayout const * pCurr )
 {
-    const sal_uInt16 nHeight = pCurr->GetRealHeight();
+    const SwTwips nHeight = pCurr->GetRealHeight();
     for( SwLinePortion *pPor = pCurr->GetNextPortion(); pPor; pPor = pPor->GetNextPortion() )
     {
         if( pPor->IsFootnotePortion() && nHeight > static_cast<SwFootnotePortion*>(pPor)->Orig() )
@@ -1874,11 +1880,6 @@ TextFrameIndex SwTextFormatInfo::ScanPortionEnd(TextFrameIndex const nStart,
         case CHAR_WJ :
             m_cHookChar = cPos;
             return i;
-
-        case CHAR_UNDERSCORE:
-            if (TextFrameIndex(COMPLETE_STRING) == m_nUnderScorePos)
-                m_nUnderScorePos = i;
-            break;
 
         default:
             if ( cTabDec )

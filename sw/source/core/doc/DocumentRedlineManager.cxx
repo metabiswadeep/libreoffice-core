@@ -42,6 +42,7 @@
 #include <osl/diagnose.h>
 #include <editeng/prntitem.hxx>
 #include <comphelper/lok.hxx>
+#include <svl/itemiter.hxx>
 
 using namespace com::sun::star;
 
@@ -442,9 +443,9 @@ namespace
 
             if (!bSameSet)
             {
-                for( sal_uInt16 nItem = 0; nItem < aTmp.TotalCount(); ++nItem)
+                for (SfxItemIter aIter(aTmp); !aIter.IsAtEnd(); aIter.NextItem())
                 {
-                    sal_uInt16 nWhich = aTmp.GetWhichByOffset(nItem);
+                    const sal_uInt16 nWhich(aIter.GetCurWhich());
                     if( SfxItemState::SET == aTmp.GetItemState( nWhich, false ) &&
                         SfxItemState::SET != aTmp2.GetItemState( nWhich, false ) )
                             aTmp2.Put( aTmp.GetPool()->GetUserOrPoolDefaultItem(nWhich) );
@@ -2599,8 +2600,13 @@ void DocumentRedlineManager::CompressRedlines(size_t nStartIndex)
 
 bool DocumentRedlineManager::SplitRedline( const SwPaM& rRange )
 {
-    bool bChg = false;
+    if (maRedlineTable.empty())
+        return false;
     auto [pStt, pEnd] = rRange.StartEnd(); // SwPosition*
+    // tdf#144208 this happens a lot during load of some DOCX files.
+    if (*pEnd > maRedlineTable.GetMaxEndPos())
+        return false;
+    bool bChg = false;
     SwRedlineTable::size_type n = 0;
     //FIXME overlapping problem GetRedline( *pStt, &n );
     for ( ; n < maRedlineTable.size(); ++n)
@@ -2818,9 +2824,9 @@ SwRedlineTable::size_type DocumentRedlineManager::GetRedlinePos( const SwNode& r
     }
     else
     {
-        for( SwRedlineTable::size_type n = 0; n < maRedlineTable.size() ; ++n )
+        for( auto it = maRedlineTable.begin(), itEnd = maRedlineTable.end(); it != itEnd; ++it )
         {
-            const SwRangeRedline* pTmp = maRedlineTable[ n ];
+            const SwRangeRedline* pTmp = *it;
             SwNodeOffset nPt = pTmp->GetPoint()->GetNodeIndex(),
                   nMk = pTmp->GetMark()->GetNodeIndex();
             if( nPt < nMk )
@@ -2828,7 +2834,7 @@ SwRedlineTable::size_type DocumentRedlineManager::GetRedlinePos( const SwNode& r
 
             if( ( RedlineType::Any == nType || nType == pTmp->GetType()) &&
                 nMk <= nNdIdx && nNdIdx <= nPt )
-                return n;
+                return std::distance(maRedlineTable.begin(), it);
 
             if( nMk > nNdIdx )
                 break;

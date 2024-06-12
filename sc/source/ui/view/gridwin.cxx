@@ -194,9 +194,9 @@ bool ScGridWindow::VisibleRange::set(SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCRO
 //  ListBox in a FloatingWindow (pParent)
 ScFilterListBox::ScFilterListBox(weld::Window* pParent, ScGridWindow* pGrid,
                                  SCCOL nNewCol, SCROW nNewRow, ScFilterBoxMode eNewMode)
-    : xBuilder(Application::CreateBuilder(pParent, "modules/scalc/ui/filterlist.ui"))
-    , xPopover(xBuilder->weld_popover("FilterList"))
-    , xTreeView(xBuilder->weld_tree_view("list"))
+    : xBuilder(Application::CreateBuilder(pParent, u"modules/scalc/ui/filterlist.ui"_ustr))
+    , xPopover(xBuilder->weld_popover(u"FilterList"_ustr))
+    , xTreeView(xBuilder->weld_tree_view(u"list"_ustr))
     , pGridWin(pGrid)
     , nCol(nNewCol)
     , nRow(nNewRow)
@@ -405,7 +405,7 @@ ScGridWindow::ScGridWindow( vcl::Window* pParent, ScViewData& rData, ScSplitPos 
             m_nDownPosX( -1 ),
             m_nDownPosY( -1 )
 {
-    set_id("grid_window");
+    set_id(u"grid_window"_ustr);
     switch(eWhich)
     {
         case SC_SPLIT_TOPLEFT:
@@ -1132,7 +1132,7 @@ void ScGridWindow::LaunchAutoFilterMenu(SCCOL nCol, SCROW nRow)
     // remember filter rules before modification
     mpAutoFilterPopup->getResult(aSaveAutoFilterResult);
 
-    collectUIInformation(OUString::number(nRow), OUString::number(nCol),"AUTOFILTER");
+    collectUIInformation(OUString::number(nRow), OUString::number(nCol),u"AUTOFILTER"_ustr);
 }
 
 void ScGridWindow::RefreshAutoFilterButton(const ScAddress& rPos)
@@ -1286,12 +1286,12 @@ void ScGridWindow::UpdateAutoFilterFromMenu(AutoFilterMode eMode)
             case AutoFilterMode::Top10:
                 pEntry->eOp = SC_TOPVAL;
                 pEntry->GetQueryItem().meType = ScQueryEntry::ByString;
-                pEntry->GetQueryItem().maString = rPool.intern("10");
+                pEntry->GetQueryItem().maString = rPool.intern(u"10"_ustr);
             break;
             case AutoFilterMode::Bottom10:
                 pEntry->eOp = SC_BOTVAL;
                 pEntry->GetQueryItem().meType = ScQueryEntry::ByString;
-                pEntry->GetQueryItem().maString = rPool.intern("10");
+                pEntry->GetQueryItem().maString = rPool.intern(u"10"_ustr);
             break;
             case AutoFilterMode::Empty:
                 pEntry->SetQueryByEmpty();
@@ -1630,7 +1630,7 @@ void ScGridWindow::LaunchDataSelectMenu(const SCCOL nCol, const SCROW nRow)
 
         mpFilterBox->EndInit();
     }
-    collectUIInformation(OUString::number(nRow), OUString::number(nCol),"SELECTMENU");
+    collectUIInformation(OUString::number(nRow), OUString::number(nCol),u"SELECTMENU"_ustr);
 }
 
 void ScGridWindow::FilterSelect( sal_uLong nSel )
@@ -2367,7 +2367,39 @@ void ScGridWindow::MouseButtonUp( const MouseEvent& rMEvt )
             }
         }
         else
+        {
             mrViewData.GetDispatcher().Execute( FID_FILL_AUTO, SfxCallMode::SLOT | SfxCallMode::RECORD );
+
+            if (comphelper::LibreOfficeKit::isActive())
+            {
+                // prepare AutoFill menu items for "Copy Cells" and "Fill Series"
+                ScTabViewShell* pViewShell = mrViewData.GetViewShell();
+                boost::property_tree::ptree aMenu;
+                boost::property_tree::ptree aItemTree;
+
+                aItemTree.put("text", "~Copy Cells");
+                aItemTree.put("type", "command");
+                aItemTree.put("command", ".uno:AutoFill?Copy:bool=true");
+                aItemTree.put("enabled", "true");
+                aMenu.push_back(std::make_pair("", aItemTree));
+
+                aItemTree.put("text", "~Fill Series");
+                aItemTree.put("type", "command");
+                aItemTree.put("command", ".uno:AutoFill?Copy:bool=false");
+                aItemTree.put("enabled", "true");
+                aMenu.push_back(std::make_pair("", aItemTree));
+                aItemTree.clear();
+
+                boost::property_tree::ptree aRoot;
+                aRoot.add_child("menu", aMenu);
+
+                std::stringstream aStream;
+                boost::property_tree::write_json(aStream, aRoot, true);
+
+                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU,
+                                                       OString(aStream.str()));
+            }
+        }
     }
     else if (mrViewData.GetFillMode() == ScFillMode::MATRIX)
     {
@@ -3416,7 +3448,7 @@ void ScGridWindow::Command( const CommandEvent& rCEvt )
             if (pHdl)
                 pHdl->SetModified();
 
-            const OUString sOldText = pHdl ? pHdl->GetEditString() : "";
+            const OUString sOldText = pHdl ? pHdl->GetEditString() : u""_ustr;
 
             // Only done/shown if a misspelled word is actually under the mouse pointer.
             Link<SpellCallbackInfo&,void> aLink = LINK( this, ScGridWindow, PopupSpellingHdl );
@@ -3461,7 +3493,7 @@ void ScGridWindow::Command( const CommandEvent& rCEvt )
             //  Is a draw object selected?
 
             SdrView* pDrawView = pViewSh->GetScDrawView();
-            if (pDrawView && pDrawView->AreObjectsMarked())
+            if (pDrawView && pDrawView->GetMarkedObjectList().GetMarkCount() != 0)
             {
                 // #100442#; the context menu should open in the middle of the selected objects
                 tools::Rectangle aSelectRect(LogicToPixel(pDrawView->GetAllMarkedBoundRect()));
@@ -3609,7 +3641,7 @@ void ScGridWindow::SelectForContextMenu( const Point& rPosPixel, SCCOL nCellX, S
     if ( bHitSelected )
         return;
 
-    bool bWasDraw = ( pDrawView && pDrawView->AreObjectsMarked() );
+    bool bWasDraw = ( pDrawView && pDrawView->GetMarkedObjectList().GetMarkCount() != 0 );
     bool bHitDraw = false;
     if ( pDrawView )
     {
@@ -4953,10 +4985,11 @@ void ScGridWindow::PasteSelection( const Point& rPosPixel )
     SdrView* pDrawView = mrViewData.GetViewShell()->GetScDrawView();
     if (pDrawView)
     {
-        const size_t nCount = pDrawView->GetMarkedObjectList().GetMarkCount();
+        const SdrMarkList& rMarkList = pDrawView->GetMarkedObjectList();
+        const size_t nCount = rMarkList.GetMarkCount();
         for (size_t i = 0; i < nCount; ++i)
         {
-            SdrObject* pObj = pDrawView->GetMarkedObjectByIndex(i);
+            SdrObject* pObj = rMarkList.GetMark(i)->GetMarkedSdrObj();
             if (pObj && pObj->GetLogicRect().Contains(aLogicPos))
             {
                 // Inside an active drawing object.  Bail out.
@@ -6200,6 +6233,7 @@ void ScGridWindow::CursorChanged()
     // now, just re-create them
 
     UpdateCursorOverlay();
+    UpdateAutoFillOverlay();
     UpdateSparklineGroupOverlay();
 }
 

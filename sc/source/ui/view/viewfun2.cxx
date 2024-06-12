@@ -1269,7 +1269,7 @@ void ScViewFunc::MergeCells( bool bApi, bool bDoContents, bool bCenter,
             OUString aStartAddress = aMarkRange.aStart.GetColRowString();
             OUString aEndAddress = aMarkRange.aEnd.GetColRowString();
 
-            collectUIInformation({{"RANGE", aStartAddress + ":" + aEndAddress}}, "MERGE_CELLS");
+            collectUIInformation({{"RANGE", aStartAddress + ":" + aEndAddress}}, u"MERGE_CELLS"_ustr);
         }
     };
 
@@ -1406,7 +1406,7 @@ bool ScViewFunc::RemoveMerge()
     }
 
     OUString aCellLocation = aRange.aStart.GetColRowString();
-    collectUIInformation({{"CELL", aCellLocation}}, "UNMERGE_CELL");
+    collectUIInformation({{"CELL", aCellLocation}}, u"UNMERGE_CELL"_ustr);
 
     return true;        //! bOk ??
 }
@@ -1532,7 +1532,7 @@ void ScViewFunc::FillAuto( FillDir eDir, SCCOL nStartCol, SCROW nStartRow,
     if (HelperNotifyChanges::getMustPropagateChangesModel(pModelObj))
         HelperNotifyChanges::Notify(*pModelObj, aChangeRanges);
     else if (pModelObj)
-        HelperNotifyChanges::Notify(*pModelObj, aChangeRanges, "data-area-invalidate");
+        HelperNotifyChanges::Notify(*pModelObj, aChangeRanges, u"data-area-invalidate"_ustr);
 }
 
 void ScViewFunc::CopyAutoSpellData( FillDir eDir, SCCOL nStartCol, SCROW nStartRow,
@@ -2287,6 +2287,7 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
     OUString  aMsgStr;
     OUString  aResStr;
     double  nSolveResult;
+    double nOriginalValue = rDoc.GetValue(ScAddress(nDestCol, nDestRow, nDestTab));
 
     GetFrameWin()->EnterWait();
 
@@ -2327,8 +2328,15 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
                                               VclMessageType::Question, VclButtonsType::YesNo, aMsgStr));
     xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0));
     xBox->set_default_response(RET_NO);
-    if (xBox->run() == RET_YES)
+    int nResponse = xBox->run();
+    if (nResponse == RET_YES)
         EnterValue( nDestCol, nDestRow, nDestTab, nSolveResult );
+
+    // tdf#161338 If Goal Seek fails, restore the original value
+    // Note that ScDocument::Solver forcefully changes the variable cell to N/A error
+    // if the Goal Seek solver fails; so here we need to restore the value
+    if (!bExact && nResponse == RET_NO)
+        rDoc.SetValue(nDestCol, nDestRow, nDestTab, nOriginalValue);
 
     GetViewData().GetViewShell()->UpdateInputHandler( true );
 }
@@ -2868,7 +2876,7 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
         //  execute without SfxCallMode::RECORD, because already contained in move command
 
         SfxStringItem aItem( SID_FILE_NAME, "private:factory/" + STRING_SCAPP );
-        SfxStringItem aTarget( SID_TARGETNAME, "_blank" );
+        SfxStringItem aTarget( SID_TARGETNAME, u"_blank"_ustr );
 
         const SfxPoolItemHolder aResult(GetViewData().GetDispatcher().ExecuteList(
             SID_OPENDOC, SfxCallMode::API|SfxCallMode::SYNCHRON,
@@ -2913,7 +2921,7 @@ void ScViewFunc::MoveTable(sal_uInt16 nDestDocNo, SCTAB nDestTab, bool bCopy,
         {
             while (rDestDoc.GetTableCount() > 1)
                 rDestDoc.DeleteTab(0);
-            rDestDoc.RenameTab( 0, "______42_____" );
+            rDestDoc.RenameTab( 0, u"______42_____"_ustr );
         }
 
         SCTAB       nTabCount   = rDoc.GetTableCount();

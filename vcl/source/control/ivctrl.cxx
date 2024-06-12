@@ -447,9 +447,9 @@ VerticalTabControl::VerticalTabControl(vcl::Window* pParent, bool bWithIcons)
     SetType(WindowType::VERTICALTABCONTROL);
     m_xChooser->SetSelectionMode(SelectionMode::Single);
     m_xChooser->SetClickHdl(LINK(this, VerticalTabControl, ChosePageHdl_Impl));
-    m_xChooser->set_width_request(110);
+    m_xChooser->set_width_request(150);
     m_xChooser->set_height_request(400);
-    m_xChooser->SetSizePixel(Size(110, 400));
+    m_xChooser->SetSizePixel(Size(150, 400));
     m_xBox->set_vexpand(true);
     m_xBox->set_hexpand(true);
     m_xBox->set_expand(true);
@@ -479,6 +479,20 @@ IMPL_LINK_NOARG(VerticalTabControl, ChosePageHdl_Impl, SvtIconChoiceCtrl*, void)
 
     if (pData->sId != m_sCurrentPageId)
         SetCurPageId(pData->sId);
+}
+
+bool VerticalTabControl::EventNotify(NotifyEvent& rNEvt)
+{
+    if (rNEvt.GetType() == NotifyEventType::KEYINPUT)
+    {
+        sal_uInt16 nCode = rNEvt.GetKeyEvent()->GetKeyCode().GetCode();
+        if (nCode == KEY_PAGEUP || nCode == KEY_PAGEDOWN)
+        {
+            m_xChooser->DoKeyInput(*(rNEvt.GetKeyEvent()));
+            return true;
+        }
+    }
+    return VclHBox::EventNotify(rNEvt);
 }
 
 void VerticalTabControl::ActivatePage()
@@ -625,6 +639,24 @@ void VerticalTabControl::SetPageText(std::u16string_view rPageId, const OUString
     if (!pData)
         return;
     pData->pEntry->SetText(rText);
+}
+
+Size VerticalTabControl::GetOptimalSize() const
+{
+    // re-calculate size - we might have replaced dummy tab pages with
+    // actual content
+    Size aOptimalPageSize(m_xBox->get_preferred_size());
+
+    for (auto const& item : maPageList)
+    {
+        Size aPagePrefSize(item->xPage->get_preferred_size());
+        if (aPagePrefSize.Width() > aOptimalPageSize.Width())
+            aOptimalPageSize.setWidth( aPagePrefSize.Width() );
+        if (aPagePrefSize.Height() > aOptimalPageSize.Height())
+            aOptimalPageSize.setHeight( aPagePrefSize.Height() );
+    }
+
+    return aOptimalPageSize;
 }
 
 void VerticalTabControl::DumpAsPropertyTree(tools::JsonWriter& rJsonWriter)

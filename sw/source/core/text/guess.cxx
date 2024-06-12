@@ -72,16 +72,17 @@ bool hasBlanksInLine(const SwTextFormatInfo& rInf, TextFrameIndex end)
     return false;
 }
 
+}
+
 // Called for the last text run in a line; if it is block-adjusted, or center / right-adjusted
 // with Word compatibility option set, and it has trailing spaces, then the function sets the
 // values, and returns 'false' value that SwTextGuess::Guess should return, to create a
 // trailing SwHolePortion.
-bool maybeAdjustPositionsForBlockAdjust(TextFrameIndex& rCutPos, TextFrameIndex& rBreakPos,
-                                        TextFrameIndex& rBreakStart, sal_uInt16& rBreakWidth,
-                                        sal_uInt16& rExtraBlankWidth, sal_uInt16& rMaxSizeDiff,
-                                        const SwTextFormatInfo& rInf, const SwScriptInfo& rSI,
-                                        sal_uInt16 maxComp,
-                                        std::optional<SwLinePortionLayoutContext> nLayoutContext)
+bool SwTextGuess::maybeAdjustPositionsForBlockAdjust(tools::Long& rMaxSizeDiff,
+                                                     SwTwips& rExtraAscent, SwTwips& rExtraDescent,
+                                                     const SwTextFormatInfo& rInf, const SwScriptInfo& rSI,
+                                                     sal_uInt16 maxComp,
+                                                     std::optional<SwLinePortionLayoutContext> nLayoutContext)
 {
     const auto& adjObj = rInf.GetTextFrame()->GetTextNodeForParaProps()->GetSwAttrSet().GetAdjust();
     const SvxAdjust& adjust = adjObj.GetAdjust();
@@ -100,7 +101,7 @@ bool maybeAdjustPositionsForBlockAdjust(TextFrameIndex& rCutPos, TextFrameIndex&
         if (rInf.GetTextFrame()->IsRightToLeft())
             return true;
     }
-    if (auto ch = rInf.GetChar(rCutPos); !ch) // end of paragraph - last line
+    if (auto ch = rInf.GetChar(m_nCutPos); !ch) // end of paragraph - last line
     {
         if (adjust == SvxAdjust::Block)
         {
@@ -125,7 +126,7 @@ bool maybeAdjustPositionsForBlockAdjust(TextFrameIndex& rCutPos, TextFrameIndex&
     // tdf#57187: block-adjusted line shorter than full width, terminated by manual
     // line break, must not use trailing spaces for adjustment
     TextFrameIndex breakPos;
-    TextFrameIndex newCutPos = AdjustCutPos(rCutPos, breakPos, rInf);
+    TextFrameIndex newCutPos = AdjustCutPos(m_nCutPos, breakPos, rInf);
 
     if (auto ch = rInf.GetChar(newCutPos); ch && ch != CH_BREAK)
         return true; // next is neither line break nor paragraph end
@@ -137,17 +138,19 @@ bool maybeAdjustPositionsForBlockAdjust(TextFrameIndex& rCutPos, TextFrameIndex&
 
     // Some trailing spaces actually found, and in case of block adjustment, the text portion
     // itself has spaces to be able to block-adjust, or single word is allowed to adjust
-    rBreakStart = rCutPos = newCutPos;
-    rBreakPos = breakPos;
+    m_nBreakStart = m_nCutPos = newCutPos;
+    m_nBreakPos = breakPos;
+    // throw away old m_xHyphWord because the current break pos is now between words
+    m_xHyphWord = nullptr;
 
     rInf.GetTextSize(&rSI, rInf.GetIdx(), breakPos - rInf.GetIdx(), nLayoutContext, maxComp,
-                     rBreakWidth, rMaxSizeDiff, rInf.GetCachedVclData().get());
-    rInf.GetTextSize(&rSI, breakPos, rBreakStart - breakPos, nLayoutContext, maxComp,
-                     rExtraBlankWidth, rMaxSizeDiff, rInf.GetCachedVclData().get());
+                     m_nBreakWidth, rMaxSizeDiff, rExtraAscent, rExtraDescent,
+                     rInf.GetCachedVclData().get());
+    rInf.GetTextSize(&rSI, breakPos, m_nBreakStart - breakPos, nLayoutContext, maxComp,
+                     m_nExtraBlankWidth, rMaxSizeDiff, rExtraAscent, rExtraDescent,
+                     rInf.GetCachedVclData().get());
 
     return false; // require SwHolePortion creation
-}
-
 }
 
 // provides information for line break calculation
@@ -167,7 +170,9 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
 
     OSL_ENSURE( nPorHeight, "+SwTextGuess::Guess: no height" );
 
-    sal_uInt16 nMaxSizeDiff;
+    tools::Long nMaxSizeDiff;
+    SwTwips nExtraAscent = 0;
+    SwTwips nExtraDescent = 0;
 
     const SwScriptInfo& rSI = rInf.GetParaPortion()->GetScriptInfo();
 
@@ -249,17 +254,16 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
     {
         // call GetTextSize with maximum compression (for kanas)
         rInf.GetTextSize(&rSI, rInf.GetIdx(), nMaxLen, rInf.GetLayoutContext(), nMaxComp,
-                         m_nBreakWidth, nMaxSizeDiff);
+                         m_nBreakWidth, nMaxSizeDiff, nExtraAscent, nExtraDescent);
 
         if ( ( m_nBreakWidth <= nLineWidth ) || ( bUnbreakableNumberings && rPor.IsNumberPortion() ) )
         {
             // portion fits to line
             m_nCutPos = rInf.GetIdx() + nMaxLen;
             bool bRet = rPor.InFieldGrp()
-                        || maybeAdjustPositionsForBlockAdjust(m_nCutPos, m_nBreakPos, m_nBreakStart,
-                                                              m_nBreakWidth, m_nExtraBlankWidth,
-                                                              nMaxSizeDiff, rInf, rSI, nMaxComp,
-                                                              rInf.GetLayoutContext());
+                        || maybeAdjustPositionsForBlockAdjust(
+                            nMaxSizeDiff, nExtraAscent, nExtraDescent, rInf,
+                            rSI, nMaxComp, rInf.GetLayoutContext());
             if( nItalic &&
                 (m_nCutPos >= TextFrameIndex(rInf.GetText().getLength()) ||
                   // #i48035# Needed for CalcFitToContent
@@ -270,6 +274,9 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
             // save maximum width for later use
             if ( nMaxSizeDiff )
                 rInf.SetMaxWidthDiff( &rPor, nMaxSizeDiff );
+
+            rInf.SetExtraAscent(nExtraAscent);
+            rInf.SetExtraDescent(nExtraDescent);
 
             m_nBreakWidth += nLeftRightBorderSpace;
 
@@ -420,9 +427,9 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
 #if OSL_DEBUG_LEVEL > 1
         if ( TextFrameIndex(COMPLETE_STRING) != m_nCutPos )
         {
-            sal_uInt16 nMinSize;
+            SwTwips nMinSize;
             rInf.GetTextSize(&rSI, rInf.GetIdx(), m_nCutPos - rInf.GetIdx(), std::nullopt, nMaxComp,
-                             nMinSize, nMaxSizeDiff);
+                             nMinSize, nMaxSizeDiff, nExtraAscent, nExtraDescent);
             OSL_ENSURE( nMinSize <= nLineWidth, "What a Guess!!!" );
         }
 #endif
@@ -433,17 +440,16 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
         // second check if everything fits to line
         m_nCutPos = m_nBreakPos = rInf.GetIdx() + nMaxLen - TextFrameIndex(1);
         rInf.GetTextSize(&rSI, rInf.GetIdx(), nMaxLen, rInf.GetLayoutContext(), nMaxComp,
-                         m_nBreakWidth, nMaxSizeDiff);
+                         m_nBreakWidth, nMaxSizeDiff, nExtraAscent, nExtraDescent);
 
         // The following comparison should always give true, otherwise
         // there likely has been a pixel rounding error in GetTextBreak
         if ( m_nBreakWidth <= nLineWidth )
         {
             bool bRet = rPor.InFieldGrp()
-                        || maybeAdjustPositionsForBlockAdjust(m_nCutPos, m_nBreakPos, m_nBreakStart,
-                                                              m_nBreakWidth, m_nExtraBlankWidth,
-                                                              nMaxSizeDiff, rInf, rSI, nMaxComp,
-                                                              rInf.GetLayoutContext());
+                        || maybeAdjustPositionsForBlockAdjust(
+                            nMaxSizeDiff, nExtraAscent, nExtraDescent, rInf,
+                            rSI, nMaxComp, rInf.GetLayoutContext());
 
             if (nItalic && (m_nBreakPos + TextFrameIndex(1)) >= TextFrameIndex(rInf.GetText().getLength()))
                 m_nBreakWidth += nItalic;
@@ -451,6 +457,9 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
             // save maximum width for later use
             if ( nMaxSizeDiff )
                 rInf.SetMaxWidthDiff( &rPor, nMaxSizeDiff );
+
+            rInf.SetExtraAscent(nExtraAscent);
+            rInf.SetExtraDescent(nExtraDescent);
 
             m_nBreakWidth += nLeftRightBorderSpace;
 
@@ -474,6 +483,8 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
     {
         m_nCutPos = m_nBreakStart = AdjustCutPos(m_nCutPos, m_nBreakPos, rInf);
         nPorLen = m_nBreakPos - rInf.GetIdx();
+        // throw away old m_xHyphWord when m_nBreakStart changes
+        m_xHyphWord = nullptr;
     }
     else
     {
@@ -735,11 +746,14 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
     if( nPorLen )
     {
         rInf.GetTextSize(&rSI, rInf.GetIdx(), nPorLen, std::nullopt, nMaxComp, m_nBreakWidth,
-                         nMaxSizeDiff, rInf.GetCachedVclData().get());
+                         nMaxSizeDiff, nExtraAscent, nExtraDescent, rInf.GetCachedVclData().get());
 
         // save maximum width for later use
         if ( nMaxSizeDiff )
             rInf.SetMaxWidthDiff( &rPor, nMaxSizeDiff );
+
+        rInf.SetExtraAscent(nExtraAscent);
+        rInf.SetExtraDescent(nExtraDescent);
 
         m_nBreakWidth += nItalic + nLeftRightBorderSpace;
     }
@@ -750,7 +764,8 @@ bool SwTextGuess::Guess( const SwTextPortion& rPor, SwTextFormatInfo &rInf,
     {
         rInf.GetTextSize(&rSI, rInf.GetIdx() + nPorLen,
                          m_nBreakStart - rInf.GetIdx() - nPorLen - m_nFieldDiff, std::nullopt,
-                         nMaxComp, m_nExtraBlankWidth, nMaxSizeDiff, rInf.GetCachedVclData().get());
+                         nMaxComp, m_nExtraBlankWidth, nMaxSizeDiff, nExtraAscent, nExtraDescent,
+                         rInf.GetCachedVclData().get());
     }
 
     if( m_pHanging )

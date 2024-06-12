@@ -138,7 +138,7 @@ public:
         } sharedstring;
         ScMatrix*    pMat;
         FormulaError nError;
-        short        nJump[ FORMULA_MAXJUMPCOUNT + 1 ];     // If/Chose token
+        short        nJump[ FORMULA_MAXPARAMS + 1 ];     // If/Choose/Let token
     };
     OUString   maExternalName; // depending on the opcode, this is either the external, or the external name, or the external table name
 
@@ -155,6 +155,7 @@ public:
     // since the reference count is cleared!
     void SetOpCode( OpCode eCode );
     void SetString( rtl_uString* pData, rtl_uString* pDataIgnoreCase );
+    void SetStringName( rtl_uString* pData, rtl_uString* pDataIgnoreCase );
     void SetSingleReference( const ScSingleRefData& rRef );
     void SetDoubleReference( const ScComplexRefData& rRef );
     void SetDouble( double fVal );
@@ -330,6 +331,7 @@ private:
 
     bool   NextNewToken(bool bInArray);
     bool ToUpperAsciiOrI18nIsAscii( OUString& rUpper, const OUString& rOrg ) const;
+    short  GetPossibleParaCount( const std::u16string_view& rLambdaFormula ) const;
 
     virtual void SetError(FormulaError nError) override;
 
@@ -358,6 +360,7 @@ private:
     bool ParsePredetectedErrRefReference( const OUString& rName, const OUString* pErrRef );
     bool ParseMacro( const OUString& );
     bool ParseNamedRange( const OUString&, bool onlyCheck = false );
+    bool ParseLambdaFuncName( const OUString& );
     bool ParseExternalNamedRange( const OUString& rSymbol, bool& rbInvalidExternalNameRange );
     bool ParseDBRange( const OUString& );
     bool ParseColRowName( const OUString& );
@@ -516,6 +519,7 @@ private:
     virtual void fillAddInToken(::std::vector< css::sheet::FormulaOpCodeMapEntry >& _rVec,bool _bIsEnglish) const override;
 
     virtual bool HandleExternalReference(const formula::FormulaToken& _aToken) override;
+    virtual bool HandleStringName() override;
     virtual bool HandleRange() override;
     virtual bool HandleColRowName() override;
     virtual bool HandleDbData() override;

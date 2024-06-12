@@ -250,11 +250,15 @@ $(eval $(call gb_Package_add_files_with_dir,odk_examples,$(SDKDIRNAME)/examples,
     DevelopersGuide/OfficeBean/OfficeIconColor32.jpg \
     DevelopersGuide/OfficeBean/OfficeIconMono16.jpg \
     DevelopersGuide/OfficeBean/OfficeIconMono32.jpg \
-    DevelopersGuide/OfficeDev/Clipboard/Clipboard.java \
-    DevelopersGuide/OfficeDev/Clipboard/ClipboardListener.java \
-    DevelopersGuide/OfficeDev/Clipboard/ClipboardOwner.java \
-    DevelopersGuide/OfficeDev/Clipboard/Makefile \
-    DevelopersGuide/OfficeDev/Clipboard/TextTransferable.java \
+    DevelopersGuide/OfficeDev/Clipboard/java/Clipboard.java \
+    DevelopersGuide/OfficeDev/Clipboard/java/ClipboardListener.java \
+    DevelopersGuide/OfficeDev/Clipboard/java/ClipboardOwner.java \
+    DevelopersGuide/OfficeDev/Clipboard/java/Makefile \
+    DevelopersGuide/OfficeDev/Clipboard/java/TextTransferable.java \
+    DevelopersGuide/OfficeDev/Clipboard/python/clipboard.py \
+    DevelopersGuide/OfficeDev/Clipboard/python/clipboard_listener.py \
+    DevelopersGuide/OfficeDev/Clipboard/python/clipboard_owner.py \
+    DevelopersGuide/OfficeDev/Clipboard/python/text_transferable.py \
     DevelopersGuide/OfficeDev/ContextMenuInterceptor.java \
     DevelopersGuide/OfficeDev/DesktopEnvironment/CustomizeView.java \
     DevelopersGuide/OfficeDev/DesktopEnvironment/Desk.java \
@@ -320,8 +324,9 @@ $(eval $(call gb_Package_add_files_with_dir,odk_examples,$(SDKDIRNAME)/examples,
     DevelopersGuide/OfficeDev/OfficeConnect.java \
     DevelopersGuide/OfficeDev/PathSettings/Makefile \
     DevelopersGuide/OfficeDev/PathSettings/PathSettingsTest.java \
-    DevelopersGuide/OfficeDev/PathSubstitution/Makefile \
-    DevelopersGuide/OfficeDev/PathSubstitution/PathSubstitutionTest.java \
+    DevelopersGuide/OfficeDev/PathSubstitution/java/Makefile \
+    DevelopersGuide/OfficeDev/PathSubstitution/java/PathSubstitutionTest.java \
+    DevelopersGuide/OfficeDev/PathSubstitution/python/path_substitution_test.py \
     DevelopersGuide/OfficeDev/TerminationTest/cxx/Makefile \
     DevelopersGuide/OfficeDev/TerminationTest/cxx/TerminationTest.cxx \
     DevelopersGuide/OfficeDev/TerminationTest/java/Makefile \

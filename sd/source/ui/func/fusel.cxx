@@ -56,6 +56,7 @@
 
 #include <svx/sdrhittesthelper.hxx>
 #include <svx/diagram/IDiagramHelper.hxx>
+#include <svx/annotation/ObjectAnnotationData.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
@@ -406,7 +407,8 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                         {
                             bool bToggle = false;
 
-                            if (rMEvt.IsShift() && mpView->GetMarkedObjectList().GetMarkCount() > 1)
+                            const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
+                            if (rMEvt.IsShift() && rMarkList.GetMarkCount() > 1)
                             {
                                 // No Toggle on single selection
                                 bToggle = true;
@@ -561,6 +563,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                 }
             }
 
+            const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
             if (bMarked &&
                 (!rMEvt.IsShift() || eHit == SdrHitKind::MarkedObject))
             {
@@ -568,7 +571,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                 if ( ! rMEvt.IsRight())
                     mpView->BegDragObj(aMDPos, nullptr, aVEvt.mpHdl, nDrgLog);
             }
-            else if (mpView->AreObjectsMarked())
+            else if (rMarkList.GetMarkCount() != 0)
             {
                 /**************************************************************
                 * Select gluepoint
@@ -659,6 +662,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
     sal_uInt16 nHitLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(HITPIX,0)).Width() );
     sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
 
+    bool bWasDragged = false;
     if (mpView->IsFrameDragSingles() || !mpView->HasMarkablePoints())
     {
         /**********************************************************************
@@ -678,7 +682,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
             }
 
             mpView->SetDragWithCopy(bDragWithCopy);
-            bool bWasDragged(mpView->EndDragObj( mpView->IsDragWithCopy() ));
+            bWasDragged = mpView->EndDragObj(mpView->IsDragWithCopy());
 
             mpView->ForceMarkedToAnotherPage();
 
@@ -703,9 +707,10 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                 // check for single object selected
                 SdrObject* pSingleObj = nullptr;
 
-                if (mpView->GetMarkedObjectList().GetMarkCount()==1)
+                const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
+                if (rMarkList.GetMarkCount()==1)
                 {
-                    pSingleObj = mpView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
+                    pSingleObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
                 }
 
                 // Check for click on svx::diagram::DiagramFrameHdl
@@ -848,11 +853,20 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
         pHdl = nullptr;
         mpWindow->ReleaseMouse();
         SdrObject* pSingleObj = nullptr;
-        const size_t nMarkCount = mpView->GetMarkedObjectList().GetMarkCount();
+        const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
+        const size_t nMarkCount = rMarkList.GetMarkCount();
 
         if (nMarkCount==1)
         {
-            pSingleObj = mpView->GetMarkedObjectList().GetMark(0)->GetMarkedSdrObj();
+            pSingleObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
+        }
+
+        if (!bWasDragged && pSingleObj && pSingleObj->isAnnotationObject() && rMEvt.IsLeft())
+        {
+            auto& pAnnotationData = pSingleObj->getAnnotationData();
+            if (pAnnotationData)
+                pAnnotationData->openPopup();
+            return true;
         }
 
         if ( (nSlotId != SID_OBJECT_SELECT && nMarkCount==0)                    ||
@@ -1034,7 +1048,8 @@ bool FuSelection::KeyInput(const KeyEvent& rKEvt)
     {
         bReturn = FuDraw::KeyInput(rKEvt);
 
-        if(mpView->GetMarkedObjectList().GetMarkCount() == 0)
+        const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
+        if(rMarkList.GetMarkCount() == 0)
         {
             mpView->ResetCreationActive();
 

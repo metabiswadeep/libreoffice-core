@@ -3390,9 +3390,9 @@ const TranslateId SC_OPCODE_X_LOOKUP_ARY[] =
     NC_("SC_OPCODE_X_LOOKUP", "Result if not found"),
     NC_("SC_OPCODE_X_LOOKUP", "If given, return given text, otherwise return #N/A."),
     NC_("SC_OPCODE_X_LOOKUP", "Match Mode"),
-    NC_("SC_OPCODE_X_LOOKUP", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_LOOKUP", "0 - Exact match. Will return #N/A if no match. (default).\n-1 - Exact match or the next smaller item.\n1 - Exact match or the next larger item.\n2 - Wildcard or regular expression match."),
     NC_("SC_OPCODE_X_LOOKUP", "Search Mode"),
-    NC_("SC_OPCODE_X_LOOKUP", "1, -1, 2 or -2 ") // TODO : add explanation of values
+    NC_("SC_OPCODE_X_LOOKUP", "1 - Search from the first value (default).\n-1 - Search from the last value (reverse).\n2 - Binary search values sorted in ascending order.\n-2 - Binary search values sorted in descending order.")
 };
 
 // -=*# Resource for function INDEX #*=-
@@ -3452,9 +3452,9 @@ const TranslateId SC_OPCODE_X_MATCH_ARY[] =
     NC_("SC_OPCODE_X_MATCH", "Search Array"),
     NC_("SC_OPCODE_X_MATCH", "The array or range to search."),
     NC_("SC_OPCODE_X_MATCH", "Match Mode"),
-    NC_("SC_OPCODE_X_MATCH", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_MATCH", "0 - Exact match. Will return #N/A if no match. (default).\n-1 - Exact match or the next smaller item.\n1 - Exact match or the next larger item.\n2 - Wildcard or regular expression match."),
     NC_("SC_OPCODE_X_MATCH", "Search Mode"),
-    NC_("SC_OPCODE_X_MATCH", "1, -1, 2 or -2 ") // TODO : add explanation of values
+    NC_("SC_OPCODE_X_MATCH", "1 - Search from the first value (default).\n-1 - Search from the last value (reverse).\n2 - Binary search values sorted in ascending order.\n-2 - Binary search values sorted in descending order.")
 };
 
 // -=*# Resource for function OFFSET #*=-
@@ -4248,7 +4248,7 @@ const TranslateId SC_OPCODE_RANDARRAY_ARY[] =
     NC_("SC_OPCODE_RANDARRAY", "Max"),
     NC_("SC_OPCODE_RANDARRAY", "The upper limit of the generated numbers."),
     NC_("SC_OPCODE_RANDARRAY", "Integers"),
-    NC_("SC_OPCODE_RANDARRAY", "Return whole numbers (TRUE) or decimal values (FALSE).")
+    NC_("SC_OPCODE_RANDARRAY", "Return integer (TRUE) or decimal (FALSE) values.")
 };
 
 // -=*# Resource for function UNIQUE #*=-
@@ -4261,6 +4261,18 @@ const TranslateId SC_OPCODE_UNIQUE_ARY[] =
     NC_("SC_OPCODE_UNIQUE", "Logical value indicating how to compare data: TRUE - compares data across columns. FALSE or omitted (default) - compares data across rows."),
     NC_("SC_OPCODE_UNIQUE", "Uniqueness"),
     NC_("SC_OPCODE_UNIQUE", "Logical value that defines what values are considered unique: TRUE - returns values that occur only once. FALSE or omitted (default) - returns all distinct (different) values in the range or array.")
+};
+
+// -=*# Resource for function LET #*=-
+const TranslateId SC_OPCODE_LET_ARY[] =
+{
+    NC_("SC_OPCODE_LET", "The LET function assigns names to calculation results. This allows storing intermediate calculations, values, or defining names inside a formula. These names only apply within the scope of the LET function."),
+    NC_("SC_OPCODE_LET", "Name 1"),
+    NC_("SC_OPCODE_LET", "The first name to assign. Must start with a letter. Cannot be the output of a formula or conflict with range syntax."),
+    NC_("SC_OPCODE_LET", "Name value "),
+    NC_("SC_OPCODE_LET", "Name value 1, Name value 2,... The value or calculation to assign to Name."),
+    NC_("SC_OPCODE_LET", "Calculation or Name "),
+    NC_("SC_OPCODE_LET", "A calculation that uses all names within the LET function. This must be the last argument in the LET function. Or a second Name to assign to a second Name value. If a second Name is specified, Name value 2 and Calculation or Name 3 become required.")
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

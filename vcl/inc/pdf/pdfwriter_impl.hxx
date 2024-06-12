@@ -55,6 +55,7 @@
 #include <comphelper/hash.hxx>
 #include <tools/stream.hxx>
 #include <vcl/BinaryDataContainer.hxx>
+#include <vcl/pdf/PDFNote.hxx>
 
 #include <vcl/filter/pdfobjectcontainer.hxx>
 #include <vcl/settings.hxx>
@@ -458,7 +459,7 @@ struct PDFPopupAnnotation : public PDFAnnotation
 
 struct PDFNoteEntry : public PDFAnnotation
 {
-    PDFNote m_aContents;
+    vcl::pdf::PDFNote m_aContents;
 
     PDFPopupAnnotation m_aPopUpAnnotation;
 
@@ -603,6 +604,14 @@ struct PDFStructureElement
     {
     }
 
+    PDFStructureElement(sal_Int32 nOwnElement, sal_Int32 nParentElement, sal_Int32 nFirstPageObject)
+        : m_nObject(0)
+        , m_nOwnElement(nOwnElement)
+        , m_nParentElement(nParentElement)
+        , m_nFirstPageObject(nFirstPageObject)
+        , m_bOpenMCSeq(false )
+    {
+    }
 };
 
 // helper structure for drawLayout and friends

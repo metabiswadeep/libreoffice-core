@@ -1843,7 +1843,7 @@ KEYINPUT_CHECKTABLE:
                     {
                         if(!pFlyFormat && SwKeyState::KeyToView != eFlyState &&
                             (rSh.GetSelectionType() & (SelectionType::DrawObject|SelectionType::DbForm))  &&
-                                rSh.GetDrawView()->AreObjectsMarked())
+                                rSh.GetDrawView()->GetMarkedObjectList().GetMarkCount() != 0)
                             eKeyState = SwKeyState::Draw_Change;
 
                         if( pFlyFormat )
@@ -1863,7 +1863,7 @@ KEYINPUT_CHECKTABLE:
                     if ( ( pFlyFormat
                            && ( nSelectionType & (SelectionType::Frame|SelectionType::Ole|SelectionType::Graphic) ) )
                          || ( ( nSelectionType & (SelectionType::DrawObject|SelectionType::DbForm) )
-                              && rSh.GetDrawView()->AreObjectsMarked() ) )
+                              && rSh.GetDrawView()->GetMarkedObjectList().GetMarkCount() != 0 ) )
                     {
                         eKeyState = pFlyFormat ? SwKeyState::Fly_Change : SwKeyState::Draw_Change;
                         if (nSelectionType & SelectionType::DrawObject)
@@ -1936,7 +1936,7 @@ KEYINPUT_CHECKTABLE_INSDEL:
                     if(SwKeyState::KeyToView != eFlyState)
                     {
                         if((nSelectionType & (SelectionType::DrawObject|SelectionType::DbForm))  &&
-                                rSh.GetDrawView()->AreObjectsMarked())
+                                rSh.GetDrawView()->GetMarkedObjectList().GetMarkCount() != 0)
                             eKeyState = SwKeyState::Draw_Change;
                         else if(nSelectionType & (SelectionType::Frame|SelectionType::Ole|SelectionType::Graphic))
                             eKeyState = SwKeyState::Fly_Change;
@@ -2267,7 +2267,7 @@ KEYINPUT_CHECKTABLE_INSDEL:
                         else if((rSh.GetSelectionType() &
                                     (SelectionType::DrawObject|SelectionType::DbForm|
                                         SelectionType::Frame|SelectionType::Ole|SelectionType::Graphic))  &&
-                                rSh.GetDrawView()->AreObjectsMarked())
+                                rSh.GetDrawView()->GetMarkedObjectList().GetMarkCount() != 0)
                             eKeyState = SwKeyState::EnterDrawHandleMode;
                         else
                         {
@@ -2290,7 +2290,7 @@ KEYINPUT_CHECKTABLE_INSDEL:
                         }
                         else if((rSh.GetSelectionType() & (SelectionType::DrawObject|SelectionType::DbForm|
                                         SelectionType::Frame|SelectionType::Ole|SelectionType::Graphic)) &&
-                                rSh.GetDrawView()->AreObjectsMarked())
+                                rSh.GetDrawView()->GetMarkedObjectList().GetMarkCount() != 0)
                         {
                             eKeyState = SwKeyState::EnterDrawHandleMode;
                         }
@@ -3361,7 +3361,8 @@ void SwEditWin::MouseButtonDown(const MouseEvent& _rMEvt)
                         !GetView().GetViewFrame().GetDispatcher()->IsLocked())
                     {
                         // Test if there is a draw object at that position and if it should be selected.
-                        bool bShould = rSh.ShouldObjectBeSelected(aDocPos);
+                        bool bSelectFrameInsteadOfCroppedImage = false;
+                        bool bShould = rSh.ShouldObjectBeSelected(aDocPos, &bSelectFrameInsteadOfCroppedImage);
 
                         if(bShould)
                         {
@@ -3372,6 +3373,14 @@ void SwEditWin::MouseButtonDown(const MouseEvent& _rMEvt)
                             rSh.LockView( true );
                             bool bSelObj
                                 = rSh.SelectObj(aDocPos, aMEvt.IsMod1() ? SW_ENTER_GROUP : 0);
+                            if ( bSelObj && bSelectFrameInsteadOfCroppedImage )
+                            {
+                                bool bWrapped(false);
+                                const SdrObject* pFly = rSh.GetBestObject(false, GotoObjFlags::FlyAny, true, nullptr, &bWrapped);
+                                pSdrView->UnmarkAllObj();
+                                bSelObj =
+                                    rSh.SelectObj(aDocPos, aMEvt.IsMod1() ? SW_ENTER_GROUP : 0, const_cast<SdrObject*>(pFly));
+                            }
                             if( bUnLockView )
                                 rSh.LockView( false );
 
@@ -4391,7 +4400,7 @@ void SwEditWin::MouseMove(const MouseEvent& _rMEvt)
                 if ( m_bIsInMove || IsMinMove( m_aStartPos, aPixPt ) )
                 {
                     // event processing for resizing
-                    if (pSdrView && pSdrView->AreObjectsMarked())
+                    if (pSdrView && pSdrView->GetMarkedObjectList().GetMarkCount() != 0)
                     {
                         const Point aSttPt( PixelToLogic( m_aStartPos ) );
 
@@ -5472,7 +5481,7 @@ SwEditWin::SwEditWin(vcl::Window *pParent, SwView &rMyView):
     m_nKS_NUMINDENTINC_Count(0),
     m_pFrameControlsManager(new SwFrameControlsManager(this))
 {
-    set_id("writer_edit");
+    set_id(u"writer_edit"_ustr);
     SetHelpId(HID_EDIT_WIN);
     EnableChildTransparentMode();
     SetDialogControlFlags( DialogControlFlags::Return | DialogControlFlags::WantFocus );
@@ -5711,7 +5720,7 @@ void SwEditWin::Command( const CommandEvent& rCEvt )
                         aEvent.ExecutePosition.Y = aPixPos.Y();
                         rtl::Reference<VCLXPopupMenu> xMenu;
                         rtl::Reference<VCLXPopupMenu> xMenuInterface = aROPopup.CreateMenuInterface();
-                        if (GetView().TryContextMenuInterception(xMenuInterface, "private:resource/ReadonlyContextMenu", xMenu, aEvent))
+                        if (GetView().TryContextMenuInterception(xMenuInterface, u"private:resource/ReadonlyContextMenu"_ustr, xMenu, aEvent))
                         {
                             if (xMenu.is())
                             {

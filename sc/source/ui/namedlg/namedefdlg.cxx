@@ -27,7 +27,7 @@
 ScNameDefDlg::ScNameDefDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* pParent,
         const ScViewData& rViewData, std::map<OUString, ScRangeName*>&& aRangeMap,
         const ScAddress& aCursorPos, const bool bUndo )
-    : ScAnyRefDlgController( pB, pCW, pParent, "modules/scalc/ui/definename.ui", "DefineNameDialog")
+    : ScAnyRefDlgController( pB, pCW, pParent, u"modules/scalc/ui/definename.ui"_ustr, u"DefineNameDialog"_ustr)
     , mbUndo( bUndo )
     , mrDoc(rViewData.GetDocument())
     , mpDocShell ( rViewData.GetDocShell() )
@@ -48,6 +48,7 @@ ScNameDefDlg::ScNameDefDlg( SfxBindings* pB, SfxChildWindow* pCW, weld::Window* 
     , m_xBtnAdd(m_xBuilder->weld_button("add"))
     , m_xBtnCancel(m_xBuilder->weld_button("cancel"))
     , m_xFtInfo(m_xBuilder->weld_label("label"))
+    , m_xExpander(m_xBuilder->weld_expander("more"))
     , m_xFtRange(m_xBuilder->weld_label("label3"))
 {
     m_xEdRange->SetReferences(this, m_xFtRange.get());
